@@ -19,6 +19,9 @@
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <HTTPUpdate.h>
+#include <Update.h>
+#include <HTTPClient.h>
+#include <esp_ota_ops.h>
 
 // ==========================================
 //          固件版本
@@ -209,6 +212,7 @@ void foundPrinter(String targetIP);                                  // 找到�
 void mqttLoop();                                                     // MQTT 循环处理
 void sendDataToMQTT();                                               // 发送数据到 MQTT
 void performOTAUpdate(String url);                                   // 远程 OTA 更新函数
+void printPartitionInfo();                                           // 打印分区信息
 void mqttCallback(char* topic, byte* payload, unsigned int length);  // MQTT 消息回调函数
 void initWebServer();                                                // 初始化 Web 服务器
 void printerSNMPLoop();                                              // 定时 SNMP 请求
@@ -426,36 +430,69 @@ void sendDataToMQTT() {
   mqttClient.publish(topic.c_str(), json.c_str());
 }
 
+// --- 打印分区信息 ---
+void printPartitionInfo() {
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
+
+  Serial.println("--- 分区信息 ---");
+  if (running) {
+    Serial.printf("当前运行分区: %s (偏移: 0x%08X, 大小: %d KB)\n",
+                  running->label, running->address, running->size / 1024);
+  }
+  if (update_partition) {
+    Serial.printf("目标更新分区: %s (偏移: 0x%08X, 大小: %d KB)\n",
+                  update_partition->label, update_partition->address, update_partition->size / 1024);
+    Serial.printf("可用空间: %d KB\n", update_partition->size / 1024);
+  } else {
+    Serial.println("⚠️ 警告: 找不到可用的 OTA 分区！");
+  }
+  Serial.println("---------------");
+}
+
 // --- 远程 OTA 更新函数 ---
 void performOTAUpdate(String url) {
+  Serial.println("🚀 开始 OTA 更新");
   Serial.println("======================================");
-  Serial.println("开始 OTA 更新: " + url);
+  Serial.printf("固件 URL: %s\n", url.c_str());
   Serial.printf("当前固件版本: %s\n", FIRMWARE_VERSION);
+
+  // 打印分区信息
+  printPartitionInfo();
 
   // 使用 WiFiClient（在 ESP32 中，WiFiClient 也支持以太网连接）
   WiFiClient client;
 
-  // 设置 OTA 更新回调，显示进度
+  // 设置 OTA 更新回调，显示详细进度
   httpUpdate.onStart([]() {
-    Serial.println("OTA 更新开始，请勿断电...");
+    Serial.println("\n📥 OTA 更新开始");
+
+    // 再次打印分区信息，确认目标分区
+    const esp_partition_t* update_partition = esp_ota_get_next_update_partition(NULL);
+    if (update_partition) {
+      Serial.printf("目标分区: %s (大小: %d KB)\n",
+                    update_partition->label, update_partition->size / 1024);
+    }
   });
 
   httpUpdate.onEnd([]() {
-    Serial.println("OTA 更新完成，准备重启...");
+    Serial.println("\n✅ 固件下载完成, 准备重启设备...");
   });
 
   httpUpdate.onProgress([](int cur, int total) {
-    Serial.printf("OTA 进度: %d%% (%d/%d bytes)\n", (cur * 100) / total, cur, total);
+    Serial.printf("📊 OTA 进度: %d%% (%d/%d bytes)\n", (cur * 100) / total, cur, total);
   });
 
   httpUpdate.onError([](int err) {
-    Serial.printf("OTA 更新错误代码: %d\n", err);
+    Serial.printf("❌ OTA 更新错误代码: %d\n", err);
   });
 
+  // 执行 OTA 更新
+  Serial.println("\n📡 正在连接服务器...");
   t_httpUpdate_return ret = httpUpdate.update(client, url);
 
   if (ret == HTTP_UPDATE_OK) {
-    Serial.println("✅ OTA 成功，3秒后重启...");
+    Serial.println("✅ OTA 更新成功！设备将在 3 秒后重启...");
     delay(3000);
     ESP.restart();
   } else {
