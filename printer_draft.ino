@@ -26,7 +26,7 @@
 // ==========================================
 //          固件版本
 // ==========================================
-#define FIRMWARE_VERSION "2.5.0"
+#define FIRMWARE_VERSION "1.1.1"
 
 // ==========================================
 //          配置区 (硬编码参数)
@@ -213,6 +213,8 @@ void mqttLoop();                                                     // MQTT 循
 void sendDataToMQTT();                                               // 发送数据到 MQTT
 void performOTAUpdate(String url);                                   // 远程 OTA 更新函数
 void printPartitionInfo();                                           // 打印分区信息
+void checkAndHandleOTARollback();                                    // 检查并处理 OTA 自动回滚
+bool performSelfCheck();                                             // 执行固件自检
 void mqttCallback(char* topic, byte* payload, unsigned int length);  // MQTT 消息回调函数
 void initWebServer();                                                // 初始化 Web 服务器
 void printerSNMPLoop();                                              // 定时 SNMP 请求
@@ -430,6 +432,150 @@ void sendDataToMQTT() {
   mqttClient.publish(topic.c_str(), json.c_str());
 }
 
+// --- 执行固件自检 ---
+// 检查新固件是否正常工作，用于自动回滚机制
+bool performSelfCheck() {
+  Serial.println("🔍 执行固件自检...");
+
+  // 检查1: 基本硬件初始化（Serial 已初始化）
+  // 检查2: 网络接口可用性
+  bool networkOK = false;
+  if (ETH.linkUp()) {
+    networkOK = true;
+    Serial.println("✅ 以太网连接正常");
+  } else if (WiFi.status() == WL_CONNECTED) {
+    networkOK = true;
+    Serial.println("✅ WiFi 连接正常");
+  } else {
+    // 网络未连接，但这不是致命错误（可能还在初始化中）
+    Serial.println("⚠️  网络未连接（可能正在初始化）");
+    networkOK = true;  // 不将网络未连接视为致命错误
+  }
+
+  // 检查3: 内存检查（简单检查）
+  if (ESP.getFreeHeap() < 50000) {
+    Serial.printf("⚠️  可用内存较低: %d bytes\n", ESP.getFreeHeap());
+    // 内存不足，但不一定致命
+  } else {
+    Serial.printf("✅ 内存正常: %d bytes\n", ESP.getFreeHeap());
+  }
+
+  // 检查4: 分区表有效性
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (!running) {
+    Serial.println("❌ 无法获取运行分区信息");
+    return false;
+  }
+  Serial.printf("✅ 分区信息正常: %s\n", running->label);
+
+  // 如果所有基本检查通过，返回 true
+  Serial.println("✅ 固件自检通过");
+  return true;
+}
+
+// --- 检查并处理 OTA 自动回滚 ---
+// 在新固件启动后调用，检查是否需要验证或回滚
+// 使用标志位避免每次启动都执行检查
+void checkAndHandleOTARollback() {
+  // 读取 OTA 验证标志位
+  preferences.begin("ota_config", false);
+  bool ota_verified = preferences.getBool("ota_verified", false);
+  preferences.end();
+
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (!running) {
+    return;  // 无法获取分区信息，跳过
+  }
+
+  esp_ota_img_states_t ota_state;
+  esp_err_t err = esp_ota_get_state_partition(running, &ota_state);
+
+  if (err != ESP_OK) {
+    // 无法获取状态，可能是旧版本固件或未启用回滚
+    return;
+  }
+
+  // 如果已经验证过且分区状态不是 PENDING_VERIFY，直接跳过
+  if (ota_verified && ota_state != ESP_OTA_IMG_PENDING_VERIFY) {
+    return;  // 已处理过，无需重复检查
+  }
+
+  Serial.println("\n======================================");
+  Serial.println("🔄 OTA 回滚检查");
+  Serial.println("======================================");
+  Serial.printf("当前分区: %s\n", running->label);
+  Serial.printf("分区状态: ");
+
+  bool needSetFlag = false;  // 是否需要设置标志位
+
+  switch (ota_state) {
+    case ESP_OTA_IMG_VALID:
+      Serial.println("VALID (已验证)");
+      Serial.println("✅ 固件已验证，无需回滚");
+      needSetFlag = true;  // 已验证，设置标志位
+      break;
+
+    case ESP_OTA_IMG_INVALID:
+      Serial.println("INVALID (无效)");
+      Serial.println("⚠️  固件标记为无效");
+      break;
+
+    case ESP_OTA_IMG_ABORTED:
+      Serial.println("ABORTED (已中止)");
+      Serial.println("⚠️  固件更新被中止");
+      break;
+
+    case ESP_OTA_IMG_NEW:
+      Serial.println("NEW (新固件)");
+      Serial.println("ℹ️  新固件，等待验证");
+      break;
+
+    case ESP_OTA_IMG_PENDING_VERIFY:
+      Serial.println("PENDING_VERIFY (等待验证)");
+      Serial.println("🔍 新固件需要验证，开始自检...");
+
+      // 执行自检
+      if (performSelfCheck()) {
+        // 自检通过，标记为有效
+        err = esp_ota_mark_app_valid_cancel_rollback();
+        if (err == ESP_OK) {
+          Serial.println("✅ 固件验证成功，已标记为有效");
+          Serial.println("✅ 取消回滚，继续使用新固件");
+          needSetFlag = true;  // 验证成功，设置标志位
+        } else {
+          Serial.printf("❌ 标记固件为有效失败: %d\n", err);
+        }
+      } else {
+        // 自检失败，标记为无效并回滚
+        Serial.println("❌ 固件自检失败");
+        Serial.println("🔄 标记为无效，准备回滚...");
+        err = esp_ota_mark_app_invalid_rollback_and_reboot();
+        if (err == ESP_OK) {
+          Serial.println("✅ 已触发回滚，设备将重启...");
+          delay(1000);
+          ESP.restart();  // 重启后不会执行到这里
+        } else {
+          Serial.printf("❌ 回滚失败: %d\n", err);
+        }
+      }
+      break;
+
+    default:
+      Serial.println("UNKNOWN (未知状态)");
+      break;
+  }
+
+  // 如果验证完成，设置标志位，避免下次启动重复检查
+  if (needSetFlag) {
+    preferences.begin("ota_config", false);
+    preferences.putBool("ota_verified", true);
+    preferences.end();
+    Serial.println("✅ OTA 验证标志位已设置");
+  }
+
+  Serial.println("======================================\n");
+}
+
 // --- 打印分区信息 ---
 void printPartitionInfo() {
   const esp_partition_t* running = esp_ota_get_running_partition();
@@ -493,6 +639,13 @@ void performOTAUpdate(String url) {
 
   if (ret == HTTP_UPDATE_OK) {
     Serial.println("✅ OTA 更新成功！设备将在 3 秒后重启...");
+
+    // 清除 OTA 验证标志位，确保新固件首次启动时执行回滚检查
+    preferences.begin("ota_config", false);
+    preferences.putBool("ota_verified", false);
+    preferences.end();
+    Serial.println("🔄 已清除 OTA 验证标志位，新固件启动时将执行验证");
+
     delay(3000);
     ESP.restart();
   } else {
@@ -765,6 +918,9 @@ void setup() {
   Serial.printf("固件版本: %s\n", FIRMWARE_VERSION);
   Serial.println("======================================");
 
+  // 步骤 0: 检查并处理 OTA 自动回滚（必须在其他初始化之前）
+  checkAndHandleOTARollback();
+
   // 步骤 1: 从非易失性存储读取配置
   preferences.begin("net_config", false);
   cfg_ssid = preferences.getString("ssid", "");
@@ -816,17 +972,17 @@ void setup() {
 }
 
 
-// --- 测试代码 ---
-void testCode() {
-  static unsigned long lastTestTime = 0;
-  const unsigned long testInterval = 1000;  // 每 1 秒执行一次
+// // --- 测试代码 ---
+// void testCode() {
+//   static unsigned long lastTestTime = 0;
+//   const unsigned long testInterval = 1000;  // 每 1 秒执行一次
 
-  if (millis() - lastTestTime >= testInterval) {
-    lastTestTime = millis();
-    Serial.println("Test Code");
-    Serial.println("版本2.5.0");
-  }
-}
+//   if (millis() - lastTestTime >= testInterval) {
+//     lastTestTime = millis();
+//     Serial.println("Test Code");
+//     Serial.println("版本1.1.1");
+//   }
+// }
 
 // --- Arduino 主循环函数 ---
 void loop() {
@@ -842,5 +998,5 @@ void loop() {
   printerSNMPLoop();  // 定时 SNMP 请求
   printerWatchdog();  // 打印机看门狗检测
 
-  testCode();  // 测试代码
+  // testCode();  // 测试代码
 }
