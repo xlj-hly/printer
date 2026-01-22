@@ -74,28 +74,30 @@ int scanCurrentIP = 1;                       // 当前扫描的 IP 地址 (最�
 
 // --- SNMP 读取的原始数值 ---
 int val_SysTotal = 0;       // 系统总打印数 (黑白 + 彩色)
-int val_ColTotal = 0;       // 彩色总打印数
-int val_TotCopies = 0;      // 总复印数 (黑白 + 彩色)
 int val_ColCopies = 0;      // 彩色复印数
+int val_BWCopies = 0;       // 黑白复印数
 int val_ColPrints = 0;      // 彩色打印数
+int val_BWPrints = 0;       // 黑白打印数
 String val_PrtSerial = "";  // 打印机序列号
 
 // --- 计算得出的数值 ---
-int calc_BWTotal = 0;   // 黑白总打印数 = 系统总数 - 彩色总数
-int calc_BWCopies = 0;  // 黑白复印数 = 总复印数 - 彩色复印数
-int calc_BWPrints = 0;  // 黑白打印数 = 黑白总数 - 黑白复印数
+int calc_ColTotal = 0;   // 彩色总打印数 = 彩色打印 + 彩色复印
+int calc_BWTotal = 0;    // 黑白总打印数 = 黑白打印 + 黑白复印
+int calc_TotCopies = 0;  // 总复印数 = 彩色复印 + 黑白复印
+int calc_BWCopies = 0;   // 黑白复印数 (从SNMP直接读取)
+int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 
 // --- MQTT 发送控制 ---
 int last_sent_SysTotal = -1;  // 上次发送的系统总数，用于检测变化
 
 // --- Ricoh 打印机 SNMP OID (对象标识符) ---
 // 这些 OID 用于从 Ricoh 打印机获取不同的数据
-const char* OID_PRT_SERIAL = "1.3.6.1.2.1.43.5.1.1.17.1";           // 打印机序列号
-const char* OID_SYS_TOTAL = "1.3.6.1.2.1.43.10.2.1.4.1.1";          // 系统总打印数
-const char* OID_COL_TOTAL = "1.3.6.1.4.1.367.3.2.1.2.19.5.1.4.1";   // 彩色总打印数
-const char* OID_TOT_COPIES = "1.3.6.1.4.1.367.3.2.1.2.19.4.0";      // 总复印数
-const char* OID_COL_COPIES = "1.3.6.1.4.1.367.3.2.1.2.16.7.0";      // 彩色复印数
-const char* OID_COL_PRINTS = "1.3.6.1.4.1.367.3.2.1.2.16.3.1.2.5";  // 彩色打印数
+const char* OID_PRT_SERIAL = "1.3.6.1.2.1.43.5.1.1.17.1";             // 打印机序列号
+const char* OID_SYS_TOTAL = "1.3.6.1.2.1.43.10.2.1.4.1.1";            // 系统总打印数
+const char* OID_COL_COPIES = "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.138";  // 彩色复印数
+const char* OID_BW_COPIES = "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.139";   // 黑白复印数
+const char* OID_COL_PRINTS = "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.142";  // 彩色打印数
+const char* OID_BW_PRINTS = "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.143";   // 黑白打印数
 
 // --- Web 配置页面 HTML (存储在程序存储器中) ---
 const char index_html[] PROGMEM = R"rawliteral(
@@ -262,10 +264,10 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
         // 只有锁定后才更新计数器 (扫描模式下不更新，避免干扰)
         if (!isScanning) {
           if (oidStr.endsWith(OID_SYS_TOTAL)) val_SysTotal = val;
-          if (oidStr.endsWith(OID_COL_TOTAL)) val_ColTotal = val;
-          if (oidStr.endsWith(OID_TOT_COPIES)) val_TotCopies = val;
           if (oidStr.endsWith(OID_COL_COPIES)) val_ColCopies = val;
+          if (oidStr.endsWith(OID_BW_COPIES)) val_BWCopies = val;
           if (oidStr.endsWith(OID_COL_PRINTS)) val_ColPrints = val;
+          if (oidStr.endsWith(OID_BW_PRINTS)) val_BWPrints = val;
         }
       }
     }
@@ -295,13 +297,19 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
     }
   } else {
     // 锁定状态：正常计算与上传数据
-    // 计算黑白打印数据 (通过总数减去彩色数)
-    calc_BWTotal = val_SysTotal - val_ColTotal;
-    calc_BWCopies = val_TotCopies - val_ColCopies;
-    calc_BWPrints = calc_BWTotal - calc_BWCopies;
+    // 使用直接从SNMP读取的值
+    calc_BWCopies = val_BWCopies;
+    calc_BWPrints = val_BWPrints;
+
+    // 通过求和计算总数
+    calc_ColTotal = val_ColPrints + val_ColCopies;  // 彩色总数 = 彩色打印 + 彩色复印
+    calc_BWTotal = val_BWPrints + val_BWCopies;     // 黑白总数 = 黑白打印 + 黑白复印
+    calc_TotCopies = val_ColCopies + val_BWCopies;  // 总复印数 = 彩色复印 + 黑白复印
 
     // 防止负数 (数据异常时的保护)
+    if (calc_ColTotal < 0) calc_ColTotal = 0;
     if (calc_BWTotal < 0) calc_BWTotal = 0;
+    if (calc_TotCopies < 0) calc_TotCopies = 0;
     if (calc_BWCopies < 0) calc_BWCopies = 0;
     if (calc_BWPrints < 0) calc_BWPrints = 0;
 
@@ -694,10 +702,10 @@ void sendSNMPRequest(IPAddress target) {
   // 如果不在扫描模式，才读取计数器 (减少扫描时的数据包大小，提高扫描速度)
   if (!isScanning) {
     message->add(OID_SYS_TOTAL, new SNMP::NullBER());   // 系统总打印数
-    message->add(OID_COL_TOTAL, new SNMP::NullBER());   // 彩色总打印数
-    message->add(OID_TOT_COPIES, new SNMP::NullBER());  // 总复印数
     message->add(OID_COL_COPIES, new SNMP::NullBER());  // 彩色复印数
+    message->add(OID_BW_COPIES, new SNMP::NullBER());   // 黑白复印数
     message->add(OID_COL_PRINTS, new SNMP::NullBER());  // 彩色打印数
+    message->add(OID_BW_PRINTS, new SNMP::NullBER());   // 黑白打印数
   }
 
   // 发送 SNMP 请求到目标 IP 的 161 端口 (SNMP 标准端口)
@@ -852,7 +860,7 @@ void initWebServer() {
     json += "\"serial\":\"" + val_PrtSerial + "\",";      // 打印机序列号
     json += "\"cc\":" + String(val_ColCopies) + ",";      // 彩色复印数
     json += "\"cp\":" + String(val_ColPrints) + ",";      // 彩色打印数
-    json += "\"ct\":" + String(val_ColTotal) + ",";       // 彩色总数
+    json += "\"ct\":" + String(calc_ColTotal) + ",";      // 彩色总数
     json += "\"bc\":" + String(calc_BWCopies) + ",";      // 黑白复印数
     json += "\"bp\":" + String(calc_BWPrints) + ",";      // 黑白打印数
     json += "\"bt\":" + String(calc_BWTotal) + ",";       // 黑白总数
