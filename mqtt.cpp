@@ -91,6 +91,9 @@ void sendDataToMQTT() {
 
   // 发送数据
   mqttClient.publish(topic.c_str(), json.c_str());
+  
+  // 更新已发送的系统总数，避免重复发送
+  last_sent_SysTotal = val_SysTotal;
 }
 
 // --- MQTT 消息回调 ---
