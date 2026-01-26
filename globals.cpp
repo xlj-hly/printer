@@ -44,3 +44,8 @@ int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 
 // --- MQTT 发送控制 ---
 int last_sent_SysTotal = -1;  // 上次发送的系统总数，用于检测变化
+
+// --- MQTT 主题字符串（运行时不变，连接时构建） ---
+String mqtt_topic_status = "";  // printer/data/{MAC}/status
+String mqtt_topic_data = "";   // printer/data/{MAC}
+String mqtt_topic_ota = "";    // printer/data/{MAC}/ota/update

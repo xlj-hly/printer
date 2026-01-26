@@ -8,6 +8,7 @@
 #include "config.h"
 #include "globals.h"
 #include "mqtt.h"
+#include <cstring>
 
 // --- SNMP 消息回调函数 ---
 // 当收到 SNMP 响应时，此函数会被调用
@@ -15,6 +16,7 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
   // 获取 SNMP 响应中的变量绑定列表
   SNMP::VarBindList* varbindlist = message->getVarBindList();
   String currentSerial = "";  // 当前收到的序列号
+  currentSerial.reserve(32);  // 预分配内存
 
   // 遍历所有变量绑定，解析每个 OID 的值
   for (unsigned int index = 0; index < varbindlist->count(); ++index) {
@@ -23,15 +25,19 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
     SNMP::BER* value = varbind->getValue();  // OID 的值
 
     if (value) {
-      String oidStr = String(name);
-
       // 处理字符串类型 (如序列号)
       if (value->getType() == SNMP::Type::OctetString) {
-        String val = String(static_cast<SNMP::OctetStringBER*>(value)->getValue());
-        if (oidStr.endsWith(OID_PRT_SERIAL)) {
-          currentSerial = val;
+        const char* octetValue = static_cast<SNMP::OctetStringBER*>(value)->getValue();
+        // 使用 strstr 检查 OID 是否以目标 OID 结尾（避免创建 String 对象）
+        size_t nameLen = strlen(name);
+        size_t oidLen = strlen(OID_PRT_SERIAL);
+        if (nameLen >= oidLen && strcmp(name + nameLen - oidLen, OID_PRT_SERIAL) == 0) {
+          currentSerial = octetValue;
           // 如果是锁定状态，更新序列号变量
-          if (!isScanning) val_PrtSerial = val;
+          if (!isScanning) {
+            val_PrtSerial.reserve(32);
+            val_PrtSerial = octetValue;
+          }
         }
       }
       // 处理整数类型 (如计数器值)
@@ -49,11 +55,20 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
 
         // 只有锁定后才更新计数器 (扫描模式下不更新，避免干扰)
         if (!isScanning) {
-          if (oidStr.endsWith(OID_SYS_TOTAL)) val_SysTotal = val;
-          if (oidStr.endsWith(OID_COL_COPIES)) val_ColCopies = val;
-          if (oidStr.endsWith(OID_BW_COPIES)) val_BWCopies = val;
-          if (oidStr.endsWith(OID_COL_PRINTS)) val_ColPrints = val;
-          if (oidStr.endsWith(OID_BW_PRINTS)) val_BWPrints = val;
+          size_t nameLen = strlen(name);
+          size_t oidLen;
+          // 使用 strcmp 直接比较 OID 后缀（避免创建 String 对象）
+          if ((oidLen = strlen(OID_SYS_TOTAL)) <= nameLen && strcmp(name + nameLen - oidLen, OID_SYS_TOTAL) == 0) {
+            val_SysTotal = val;
+          } else if ((oidLen = strlen(OID_COL_COPIES)) <= nameLen && strcmp(name + nameLen - oidLen, OID_COL_COPIES) == 0) {
+            val_ColCopies = val;
+          } else if ((oidLen = strlen(OID_BW_COPIES)) <= nameLen && strcmp(name + nameLen - oidLen, OID_BW_COPIES) == 0) {
+            val_BWCopies = val;
+          } else if ((oidLen = strlen(OID_COL_PRINTS)) <= nameLen && strcmp(name + nameLen - oidLen, OID_COL_PRINTS) == 0) {
+            val_ColPrints = val;
+          } else if ((oidLen = strlen(OID_BW_PRINTS)) <= nameLen && strcmp(name + nameLen - oidLen, OID_BW_PRINTS) == 0) {
+            val_BWPrints = val;
+          }
         }
       }
     }
@@ -66,20 +81,23 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
       if (currentSerial == cfg_target_serial) {
         // 序列号匹配！锁定这台打印机
         val_PrtSerial = currentSerial;  // 保存序列号
-        foundPrinter(remote.toString());
+        String remoteIP;
+        remoteIP.reserve(16);
+        remoteIP = remote.toString();
+        foundPrinter(remoteIP);
       } else {
         // 序列号不匹配，跳过
-        Serial.print("IP ");
-        Serial.print(remote);
-        Serial.print(" Serial: ");
-        Serial.print(currentSerial);
-        Serial.println(" (Mismatch, skipping)");
+        IPAddress remoteIP = remote;
+        Serial.printf("IP %s Serial: %s (Mismatch, skipping)\n", remoteIP.toString().c_str(), currentSerial.c_str());
       }
     }
     // 情况 2: 如果用户没设定序列号 (留空) -> 回退方案: 锁定第一台响应的打印机
     else {
       val_PrtSerial = currentSerial;
-      foundPrinter(remote.toString());
+      String remoteIP;
+      remoteIP.reserve(16);
+      remoteIP = remote.toString();
+      foundPrinter(remoteIP);
     }
   } else {
     // 锁定状态：正常计算与上传数据
@@ -103,7 +121,8 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
 
     // 只有当系统总数发生变化且大于 0 时才发送 MQTT (避免重复发送)
     if (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0) {
-      sendDataToMQTT();
+      sendDataToMQTT();                   // 发送数据到 MQTT
+      last_sent_SysTotal = val_SysTotal;  // 更新已发送的系统总数，避免重复上报
     }
   }
 }

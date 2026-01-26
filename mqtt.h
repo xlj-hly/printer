@@ -9,6 +9,9 @@
 
 #include <Arduino.h>
 
+// 初始化 MQTT 主题字符串（在获取 MAC 地址后调用）
+void initMQTTTopics();
+
 // 连接 MQTT 服务器
 void connectMQTT();
 

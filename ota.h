@@ -10,7 +10,7 @@
 #include <Arduino.h>
 
 // 执行远程 OTA 更新
-void performOTAUpdate(String url);
+void performOTAUpdate(const String& url);
 
 // 打印分区信息
 void printPartitionInfo();

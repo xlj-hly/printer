@@ -22,6 +22,7 @@
 #include <Update.h>
 #include <HTTPClient.h>
 #include <esp_ota_ops.h>
+#include <ArduinoJson.h>
 
 #include "config.h"
 #include "globals.h"
@@ -46,17 +47,21 @@ void initNetwork() {
         ETH.setHostname("esp32-device-node");
         break;
       case ARDUINO_EVENT_ETH_GOT_IP:
-        // 以太网获取到 IP 地址
-        Serial.print("LAN IP: ");
-        Serial.println(ETH.localIP());
-        statusMessage = "Ethernet Connected: " + ETH.localIP().toString();
-        break;
+        {
+          // 以太网获取到 IP 地址
+          IPAddress ip = ETH.localIP();
+          Serial.printf("LAN IP: %s\n", ip.toString().c_str());
+          statusMessage = "Ethernet Connected: " + ip.toString();
+          break;
+        }
       case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        // WiFi 获取到 IP 地址
-        Serial.print("WiFi IP: ");
-        Serial.println(WiFi.localIP());
-        statusMessage = "WiFi Connected: " + WiFi.localIP().toString();
-        break;
+        {
+          // WiFi 获取到 IP 地址
+          IPAddress ip = WiFi.localIP();
+          Serial.printf("WiFi IP: %s\n", ip.toString().c_str());
+          statusMessage = "WiFi Connected: " + ip.toString();
+          break;
+        }
       default:
         break;
     }
@@ -80,13 +85,15 @@ void initWebServer() {
 
   // 配置 API：返回当前配置的 JSON
   server.on("/config", HTTP_GET, []() {
-    String json = "{";
-    json += "\"mac\":\"" + deviceMAC + "\",";
-    json += "\"ssid\":\"" + cfg_ssid + "\",";
-    json += "\"pass\":\"" + cfg_pass + "\",";
-    json += "\"t_ser\":\"" + cfg_target_serial + "\",";  // 返回目标序列号
-    json += "\"pip\":\"" + cfg_printer_ip + "\"";
-    json += "}";
+    StaticJsonDocument<200> doc;  // 栈上分配, 预分配 200 字节
+    doc["mac"] = deviceMAC;
+    doc["ssid"] = cfg_ssid;
+    doc["pass"] = cfg_pass;
+    doc["t_ser"] = cfg_target_serial;  // 目标打印机序列号
+    doc["pip"] = cfg_printer_ip;
+
+    String json;
+    serializeJson(doc, json);
     server.send(200, "application/json", json);
   });
 
@@ -106,20 +113,23 @@ void initWebServer() {
 
   // 状态 API：返回实时状态数据
   server.on("/status", HTTP_GET, []() {
-    String mqttState = mqttClient.connected() ? "Connected" : "Disconnected";
-    String json = "{";
-    json += "\"serial\":\"" + val_PrtSerial + "\",";      // 打印机序列号
-    json += "\"cc\":" + String(val_ColCopies) + ",";      // 彩色复印数
-    json += "\"cp\":" + String(val_ColPrints) + ",";      // 彩色打印数
-    json += "\"ct\":" + String(calc_ColTotal) + ",";      // 彩色总数
-    json += "\"bc\":" + String(calc_BWCopies) + ",";      // 黑白复印数
-    json += "\"bp\":" + String(calc_BWPrints) + ",";      // 黑白打印数
-    json += "\"bt\":" + String(calc_BWTotal) + ",";       // 黑白总数
-    json += "\"st\":" + String(val_SysTotal) + ",";       // 系统总数
-    json += "\"msg\":\"" + statusMessage + "\",";         // 状态消息
-    json += "\"mqtt_state\":\"" + mqttState + "\",";      // MQTT 连接状态
-    json += "\"detectedIP\":\"" + cfg_printer_ip + "\"";  // 检测到的打印机 IP
-    json += "}";
+    const char* mqttState = mqttClient.connected() ? "Connected" : "Disconnected";
+
+    StaticJsonDocument<300> doc;
+    doc["serial"] = val_PrtSerial;       // 打印机序列号
+    doc["cc"] = val_ColCopies;           // 彩色复印数
+    doc["cp"] = val_ColPrints;           // 彩色打印数
+    doc["ct"] = calc_ColTotal;           // 彩色总数
+    doc["bc"] = calc_BWCopies;           // 黑白复印数
+    doc["bp"] = calc_BWPrints;           // 黑白打印数
+    doc["bt"] = calc_BWTotal;            // 黑白总数
+    doc["st"] = val_SysTotal;            // 系统总打印数
+    doc["msg"] = statusMessage;          // 状态消息
+    doc["mqtt_state"] = mqttState;       // MQTT 状态
+    doc["detectedIP"] = cfg_printer_ip;  // 打印机 IP 地址
+
+    String json;
+    serializeJson(doc, json);
     server.send(200, "application/json", json);
   });
 
@@ -141,10 +151,19 @@ void setup() {
 
   // 步骤 1: 从非易失性存储读取配置
   preferences.begin("net_config", false);
-  cfg_ssid = preferences.getString("ssid", "");
-  cfg_pass = preferences.getString("pass", "");
-  cfg_printer_ip = preferences.getString("pip", "");
-  cfg_target_serial = preferences.getString("t_ser", "");
+  // 只在配置存在时才读取，避免不必要的 String 对象创建
+  if (preferences.isKey("ssid")) {
+    cfg_ssid = preferences.getString("ssid", "");  // WiFi SSID
+  }
+  if (preferences.isKey("pass")) {
+    cfg_pass = preferences.getString("pass", "");  // WiFi 密码
+  }
+  if (preferences.isKey("pip")) {
+    cfg_printer_ip = preferences.getString("pip", "");  // 打印机 IP 地址
+  }
+  if (preferences.isKey("t_ser")) {
+    cfg_target_serial = preferences.getString("t_ser", "");  // 目标打印机序列号
+  }
   preferences.end();
 
   // 步骤 2: 初始化网络
@@ -156,27 +175,33 @@ void setup() {
 
   // 步骤 4: 获取设备 MAC 地址
   deviceMAC = ETH.macAddress();
-  if (deviceMAC == "00:00:00:00:00:00") {
+  // 检查 MAC 地址是否有效（空字符串或全零地址视为无效）
+  if (deviceMAC.length() == 0 || deviceMAC == "00:00:00:00:00:00") {
     deviceMAC = WiFi.macAddress();
   }
-  Serial.println("Device MAC: " + deviceMAC);
+  Serial.printf("Device MAC: %s\n", deviceMAC.c_str());
 
-  // 步骤 5: 配置 MQTT 服务器
-  if (String(MQTT_BROKER) != "") {
-    mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-    mqttClient.setCallback(mqttCallback);
-  }
+  // 步骤 5: 初始化 MQTT 主题字符串（MAC 地址确定后）
+  initMQTTTopics();
 
-  // 步骤 6: 初始化 Web 服务器
+  // 步骤 6: 配置 MQTT 服务器
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+
+  // 步骤 7: 初始化 Web 服务器
   initWebServer();
 
-  // 步骤 7: 等待网络连接
+  // 步骤 8: 等待网络连接（最多等待10秒）
   unsigned long startWait = millis();
-  while (!ETH.linkUp() && WiFi.status() != WL_CONNECTED && millis() - startWait < 5000) {
+  while (
+    !ETH.linkUp()                     // 以太网链路未建立
+    && WiFi.status() != WL_CONNECTED  // WiFi 未连接
+    && millis() - startWait < 10000   // 等待时间超过10秒
+  ) {
     delay(100);
   }
 
-  // 步骤 8: 判断启动模式
+  // 步骤 9: 判断启动模式
   // 情况 1: 如果打印机 IP 为空 -> 进入扫描模式
   // 情况 2: 如果已配置打印机 IP -> 直接连接
   // 扫描模式下会检查 cfg_target_serial (如果配置了就只找那台，没配置就找第一台)

@@ -20,11 +20,8 @@ static void setOTAVerified(bool verified) {
   preferences.end();
 }
 
-// --- 执行固件自检 ---
-// 检查新固件是否正常工作，用于自动回滚机制
-bool performSelfCheck() {
-  Serial.println("🔍 执行固件自检...");
-
+// --- 硬件自检 ---
+static bool hardwareSelfCheck() {
   // 检查1: 基本硬件初始化（Serial 已初始化）
   // 检查2: 网络接口可用性
   // 不将网络未连接视为致命错误
@@ -34,7 +31,7 @@ bool performSelfCheck() {
     Serial.println("✅ WiFi 连接正常");
   } else {
     // 网络未连接，但这不是致命错误（可能还在初始化中）
-    Serial.println("⚠️  网络未连接（可能正在初始化）");
+    Serial.println("⚠️ 网络未连接（可能正在初始化）");
   }
 
   // 检查3: 内存检查（简单检查）
@@ -43,7 +40,6 @@ bool performSelfCheck() {
   } else {
     Serial.printf("✅ 内存正常: %d bytes\n", ESP.getFreeHeap());
   }
-
   // 检查4: 分区表有效性
   const esp_partition_t* running = esp_ota_get_running_partition();
   if (!running) {
@@ -54,6 +50,26 @@ bool performSelfCheck() {
 
   // 如果所有基本检查通过，返回 true
   Serial.println("✅ 固件自检通过");
+  return true;
+}
+
+// --- 执行固件自检 ---
+// 检查新固件是否正常工作，用于自动回滚机制
+bool performSelfCheck() {
+  Serial.println("🔍 执行固件自检...");
+
+  // 检查1: 硬件自检
+  if (!hardwareSelfCheck()) {
+    return false;  // 硬件自检失败，直接返回
+  }
+
+  // 检查2: 其他检查（可扩展）
+  // TODO: 后续可在此添加其他检查项
+  // if (!otherCheck()) {
+  //   return false;
+  // }
+
+  // 所有检查通过
   return true;
 }
 
@@ -80,11 +96,11 @@ void checkAndHandleOTARollback() {
   preferences.end();
 
   if (ota_verified) {
-    Serial.println("[OTA] 标志位: 已验证，跳过");
+    Serial.println("✅ 标志位: 已验证，跳过");
     return;
   }
 
-  Serial.println("[OTA] 标志位: 需要验证");
+  Serial.println("🕒 标志位: 需要验证");
 
   esp_ota_img_states_t ota_state;
   esp_err_t err = esp_ota_get_state_partition(running, &ota_state);
@@ -97,46 +113,46 @@ void checkAndHandleOTARollback() {
 
   switch (ota_state) {
     case ESP_OTA_IMG_VALID:
-      Serial.println("[OTA] 分区状态: VALID");
+      Serial.println("✅ 分区状态: VALID");
       Serial.println("✅ 固件已验证");
       break;
     case ESP_OTA_IMG_INVALID:
-      Serial.println("[OTA] 分区状态: INVALID");
+      Serial.println("❌ 分区状态: INVALID");
       Serial.println("❌ 固件已验证失败");
       break;
 
     case ESP_OTA_IMG_ABORTED:
-      Serial.println("[OTA] 分区状态: ABORTED");
-      Serial.println("❌ 固件已中止");
+      Serial.println("⏹️ 分区状态: ABORTED");
+      Serial.println("⏹️ 固件已中止");
       break;
 
     case ESP_OTA_IMG_NEW:
-      Serial.println("[OTA] 分区状态: NEW");
-      Serial.println("ℹ️ 固件已新固件");
+      Serial.println("ℹ️ 分区状态: NEW");
+      Serial.println("ℹ️ 固件是新固件");
       break;
 
     case ESP_OTA_IMG_PENDING_VERIFY:
-      Serial.println("[OTA] 分区状态: PENDING_VERIFY");
-      Serial.println("🔄 这里为系统标志位");
+      Serial.println("🔔 分区状态: PENDING_VERIFY");
+      Serial.println("🔔 这里为系统标志位");
       break;
     default:
-      Serial.println("[OTA] 分区状态: UNKNOWN");
-      Serial.println("❌ 固件状态未知");
+      Serial.println("❓分区状态: UNKNOWN");
+      Serial.println("❓ 固件状态未知");
       break;
   }
 
-  Serial.println("[OTA] 开始自检...");
+  Serial.println("▶️ 开始自检...");
   if (performSelfCheck()) {
     esp_ota_mark_app_valid_cancel_rollback();  // 确认应用运行成功
-    Serial.println("[OTA] 🔄 自检通过, 清除标志位");
-    setOTAVerified(true);
+    Serial.println("🔄 自检通过, 清除标志位");
+    setOTAVerified(true);  // 设置标志位为 true，下次启动跳过检查
   } else {
-    Serial.println("[OTA] 自检失败，触发回滚");
-    esp_ota_mark_app_invalid_rollback_and_reboot();  // 回滚
-    Serial.println("[OTA] 🔄 回滚成功，准备清除标志位, 重启设备...");
-    setOTAVerified(true);
+    Serial.println("❌ 自检失败，触发回滚");
+    esp_ota_mark_app_invalid_rollback_and_reboot();  // 回滚到上一个固件
+    Serial.println("⏳ 回滚成功，准备清除标志位, 重启设备...");
+    setOTAVerified(true);  // 设置标志位为 true，避免无限循环
     delay(2000);
-    ESP.restart();
+    ESP.restart();  // 重启设备，加载回滚后的固件
   }
 }
 
@@ -161,7 +177,7 @@ void printPartitionInfo() {
 }
 
 // --- 远程 OTA 更新函数 ---
-void performOTAUpdate(String url) {
+void performOTAUpdate(const String& url) {
   Serial.println("🚀 开始 OTA 更新");
   Serial.println("======================================");
   Serial.printf("固件 URL: %s\n", url.c_str());

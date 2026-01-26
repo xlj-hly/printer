@@ -18,8 +18,10 @@ void startScan() {
   scanCurrentIP = 1;  // 从 IP 地址最后一位 1 开始扫描
 
   // 根据是否配置了目标序列号，设置不同的状态消息
+  statusMessage.reserve(50);
   if (cfg_target_serial != "") {
-    statusMessage = "Scanning for Serial: " + cfg_target_serial;
+    statusMessage = "Scanning for Serial: ";
+    statusMessage += cfg_target_serial;
   } else {
     statusMessage = "Scanning for ANY Printer...";
   }

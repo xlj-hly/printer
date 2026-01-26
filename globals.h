@@ -54,4 +54,9 @@ extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 // --- MQTT 发送控制 ---
 extern int last_sent_SysTotal;  // 上次发送的系统总数，用于检测变化
 
+// --- MQTT 主题字符串（运行时不变，连接时构建） ---
+extern String mqtt_topic_status;  // printer/data/{MAC}/status
+extern String mqtt_topic_data;    // printer/data/{MAC}
+extern String mqtt_topic_ota;     // printer/data/{MAC}/ota/update
+
 #endif  // GLOBALS_H
