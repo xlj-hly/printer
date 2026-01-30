@@ -166,6 +166,10 @@ void setup() {
   }
   preferences.end();
 
+  // 打印机锁定引脚：输出模式，默认低电平（锁定）
+  pinMode(PRINTER_LOCK_PIN, OUTPUT);
+  digitalWrite(PRINTER_LOCK_PIN, LOW);
+
   // 步骤 2: 初始化网络
   initNetwork();
 

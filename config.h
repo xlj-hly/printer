@@ -45,4 +45,7 @@
 #define OID_COL_PRINTS "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.142"  // 彩色打印数
 #define OID_BW_PRINTS "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.143"   // 黑白打印数
 
+// --- 打印机锁定 ---
+#define PRINTER_LOCK_PIN 22                 // 打印机锁定引脚 (高电平解锁)
+
 #endif  // CONFIG_H

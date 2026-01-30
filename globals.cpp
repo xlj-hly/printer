@@ -49,3 +49,4 @@ int last_sent_SysTotal = -1;  // 上次发送的系统总数，用于检测变�
 String mqtt_topic_status = "";  // printer/data/{MAC}/status
 String mqtt_topic_data = "";   // printer/data/{MAC}
 String mqtt_topic_ota = "";    // printer/data/{MAC}/ota/update
+String mqtt_topic_lock = "";   // printer/data/{MAC}/lock，payload: lock/unlock

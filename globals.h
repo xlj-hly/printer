@@ -58,5 +58,6 @@ extern int last_sent_SysTotal;  // 上次发送的系统总数，用于检测变
 extern String mqtt_topic_status;  // printer/data/{MAC}/status
 extern String mqtt_topic_data;    // printer/data/{MAC}
 extern String mqtt_topic_ota;     // printer/data/{MAC}/ota/update
+extern String mqtt_topic_lock;    // printer/data/{MAC}/lock，payload: lock/unlock
 
 #endif  // GLOBALS_H

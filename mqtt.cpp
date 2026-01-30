@@ -38,6 +38,13 @@ void initMQTTTopics() {
   mqtt_topic_ota += "/";
   mqtt_topic_ota += deviceMAC;
   mqtt_topic_ota += "/ota/update";
+
+  // 构建锁定控制主题: printer/data/{MAC}/lock | 接收 | payload: lock / unlock
+  mqtt_topic_lock.reserve(strlen(MQTT_TOPIC_PREFIX) + deviceMAC.length() + 7);
+  mqtt_topic_lock = MQTT_TOPIC_PREFIX;
+  mqtt_topic_lock += "/";
+  mqtt_topic_lock += deviceMAC;
+  mqtt_topic_lock += "/lock";
 }
 
 // --- 连接 MQTT ---
@@ -59,12 +66,14 @@ void connectMQTT() {
     // 发送在线状态消息
     mqttClient.publish(mqtt_topic_status.c_str(), "online", true);
 
-    // 订阅 OTA 更新主题
+    // 订阅 OTA 主题
     mqttClient.subscribe(mqtt_topic_ota.c_str());
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
+    mqttClient.subscribe(mqtt_topic_lock.c_str());
     Serial.println("已订阅主题:");
     Serial.printf("  - %s\n", mqtt_topic_ota.c_str());
     Serial.printf("  - %s\n", MQTT_TOPIC_BROADCAST_UPDATE);
+    Serial.printf("  - %s (payload: lock/unlock)\n", mqtt_topic_lock.c_str());
   }
 }
 
@@ -113,9 +122,11 @@ void sendDataToMQTT() {
   // 检查 MQTT 连接状态
   if (!mqttClient.connected()) return;
 
-  StaticJsonDocument<100> doc;
+  StaticJsonDocument<150> doc;
   doc["mac"] = deviceMAC;
   doc["status"] = "online";
+  doc["msg"] = "打印了";
+  doc["st"] = val_SysTotal;
 
   String json;
   serializeJson(doc, json);
@@ -152,6 +163,12 @@ void updateFirmware(const String& jsonMessage) {
   performOTAUpdate(url);
 }
 
+// --- 锁定打印机 ---
+void printerLock(bool lock) {
+  digitalWrite(PRINTER_LOCK_PIN, lock ? LOW : HIGH);  // 高电平解锁，低电平锁定
+  Serial.println(lock ? "✅ 锁定打印机..." : "✅ 解锁打印机...");
+}
+
 // --- MQTT 消息回调 ---
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // 构建消息（预分配内存减少碎片）
@@ -171,6 +188,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   } else if (strcmp(topic, MQTT_TOPIC_BROADCAST_UPDATE) == 0) {
     Serial.println("✅ 广播更新主题，开始广播更新...");
     updateFirmware(message);
+  } else if (strcmp(topic, mqtt_topic_lock.c_str()) == 0) {
+    message.trim();
+    if (message == "lock") {
+      printerLock(true);
+    } else if (message == "unlock") {
+      printerLock(false);
+    }
   } else {
     Serial.println("❌ 主题不匹配，忽略消息");
   }
