@@ -11,10 +11,10 @@
 // ==========================================
 //          固件版本
 // ==========================================
-#define FIRMWARE_VERSION "0.0.11"
+#define FIRMWARE_VERSION "0.0.19"
 
 // ==========================================
-//          配置区 (硬编码参数)
+//          配置区
 // ==========================================
 // MQTT 服务器配置
 #define MQTT_BROKER "192.168.14.70"       // MQTT 服务器 IP 地址
@@ -23,13 +23,21 @@
 #define MQTT_PASS "admin123"              // MQTT 密码
 #define MQTT_TOPIC_PREFIX "printer/data"  // MQTT 主题前缀
 
-// --- WT32-ETH01 以太网引脚配置 ---
-#define ETH_CLK_MODE ETH_CLOCK_GPIO0_IN  // 以太网时钟模式
-#define ETH_POWER_PIN 16                 // 以太网电源控制引脚
-#define ETH_TYPE ETH_PHY_LAN8720         // 以太网 PHY 芯片类型
-#define ETH_ADDR 1                       // 以太网 PHY 地址
-#define ETH_MDC_PIN 23                   // MDC 引脚 (管理数据时钟)
-#define ETH_MDIO_PIN 18                  // MDIO 引脚 (管理数据输入输出)
+// --- NodeMCU-32S + W5500 (SPI) 以太网引脚配置 ---
+#define ETH_PHY_TYPE ETH_PHY_W5500  // 以太网 PHY 芯片类型 (W5500)
+#define ETH_PHY_ADDR 1              // W5500 片选地址
+#define ETH_PHY_CS 5                // SPI 片选引脚
+#define ETH_PHY_IRQ -1              // 中断引脚 (-1 表示未接)
+#define ETH_PHY_RST -1              // 复位引脚 (-1 表示未接)
+#define ETH_SPI_SCK 18              // SPI 时钟
+#define ETH_SPI_MISO 19             // SPI 主机入从机出
+#define ETH_SPI_MOSI 23             // SPI 主机出从机入
+
+// --- Network 双网优先级轮询 ---
+#define NET_POLL_MS 2000    // 轮询间隔 (毫秒)，用于切换默认出口
+#define NET_DEFAULT_ETH 0   // 当前出口：以太网
+#define NET_DEFAULT_WIFI 1  // 当前出口：WiFi
+#define NET_DEFAULT_NONE 2  // 当前无网
 
 // --- 系统参数配置 ---
 #define SNMP_INTERVAL 5000       // SNMP 查询间隔 (毫秒)
@@ -46,6 +54,6 @@
 #define OID_BW_PRINTS "1.3.6.1.4.1.367.3.2.1.2.19.5.1.9.143"   // 黑白打印数
 
 // --- 打印机锁定 ---
-#define PRINTER_LOCK_PIN 22                 // 打印机锁定引脚 (高电平解锁)
+#define PRINTER_LOCK_PIN 22  // 打印机锁定引脚 (高电平解锁)
 
 #endif  // CONFIG_H

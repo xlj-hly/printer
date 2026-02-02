@@ -71,9 +71,9 @@ void connectMQTT() {
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
     mqttClient.subscribe(mqtt_topic_lock.c_str());
     Serial.println("已订阅主题:");
-    Serial.printf("  - %s\n", mqtt_topic_ota.c_str());
-    Serial.printf("  - %s\n", MQTT_TOPIC_BROADCAST_UPDATE);
-    Serial.printf("  - %s (payload: lock/unlock)\n", mqtt_topic_lock.c_str());
+    Serial.printf("  - OTA 个人更新主题: %s\n", mqtt_topic_ota.c_str());
+    Serial.printf("  - OTA 广播更新主题: %s\n", MQTT_TOPIC_BROADCAST_UPDATE);
+    Serial.printf("  - 锁机控制主题: %s \n", mqtt_topic_lock.c_str());
   }
 }
 
@@ -84,9 +84,7 @@ void mqttLoop() {
   // 如果未连接，尝试重连
   if (!mqttClient.connected()) {
     static unsigned long lastMqttRetry = 0;
-    // 每 5 秒尝试重连一次
     if (millis() - lastMqttRetry > 5000) {
-      Serial.println("❌ MQTT 连接失败，尝试重连...");
       lastMqttRetry = millis();
       connectMQTT();
     }

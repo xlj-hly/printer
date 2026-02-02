@@ -34,8 +34,8 @@ void processScanLoop() {
   // 如果不在扫描模式，直接返回
   if (!isScanning) return;
 
-  // 获取本地 IP 地址 (优先使用以太网，否则使用 WiFi)
-  IPAddress local = (ETH.linkUp()) ? ETH.localIP() : WiFi.localIP();
+  // 获取本地 IP (以太网优先，与 networkPoll 一致)
+  IPAddress local = (ETH.linkUp() && ETH.hasIP()) ? ETH.localIP() : WiFi.localIP();
 
   // 如果本地 IP 无效，停止扫描
   if (local[0] == 0) {

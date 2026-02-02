@@ -1,18 +1,15 @@
 /*
- * WT32-ETH01 Printer Node
- * 
- * 功能：
- * - 通过 SNMP 读取 Ricoh 打印机计数器数据
- * - 通过 MQTT 上报数据到服务器
- * - 支持远程 OTA 固件更新
- * - Web 配置界面
- * 
- * 硬件：WT32-ETH01 (ESP32 + LAN8720)
+ * Printer Node (NodeMCU-32S + W5500)
+ *
+ * 功能：SNMP 读 Ricoh 计数器、MQTT 上报、OTA、Web 配置
+ * 硬件：NodeMCU-32S + W5500 (SPI
  */
 
 #include <Arduino.h>
-#include <ETH.h>
 #include <WiFi.h>
+#include <ETH.h>
+#include <Network.h>
+#include <SPI.h>
 #include <WebServer.h>
 #include <WiFiUdp.h>
 #include <SNMP.h>
@@ -33,47 +30,61 @@
 #include "printer_monitor.h"
 
 // --- 函数前置声明 ---
-void initNetwork();    // 初始化网络连接
-void initWebServer();  // 初始化 Web 服务器
+void initNetwork();                             // 初始化网络连接
+void initWebServer();                           // 初始化 Web 服务器
+void ethernet_init();                           // 初始化以太网
+void wifi_init();                               // 初始化 WiFi
+void onNetworkEvent(arduino_event_id_t event);  // 网络事件回调函数
+
+void wifi_init() {
+  WiFi.persistent(false);
+  WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
+  WiFi.STA.begin();
+}
+
+void ethernet_init() {
+  SPI.begin(ETH_SPI_SCK, ETH_SPI_MISO, ETH_SPI_MOSI);
+}
+
+
+// --- 网络事件回调函数 ---
+void onNetworkEvent(arduino_event_id_t event) {
+  Serial.printf("[Network Event] %d %s\n", event, NetworkEvents::eventName(event));
+  switch (event) {
+    case ARDUINO_EVENT_ETH_START:
+      ETH.setHostname("esp32-device-node");
+      break;
+    case ARDUINO_EVENT_ETH_GOT_IP:
+      {
+        IPAddress ip = ETH.localIP();
+        Serial.printf("LAN IP: %s\n", ip.toString().c_str());
+        statusMessage = "Ethernet Connected: " + ip.toString();
+        Network.setDefaultInterface(ETH);
+        break;
+      }
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      {
+        IPAddress ip = WiFi.localIP();
+        Serial.printf("WiFi IP: %s\n", ip.toString().c_str());
+        statusMessage = "WiFi Connected: " + ip.toString();
+        break;
+      }
+    default:
+      break;
+  }
+}
 
 // --- 初始化网络连接 ---
-// 优先使用以太网，如果配置了 WiFi 则同时启用 WiFi
+// 顺序：Network 框架 → 事件 → SPI → ETH → WiFi；有线优先时在 ETH_GOT_IP 里 setDefaultInterface(ETH)
 void initNetwork() {
-  // 注册 WiFi 事件回调，用于监控网络状态
-  WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-    switch (event) {
-      case ARDUINO_EVENT_ETH_START:
-        // 以太网启动时设置主机名
-        ETH.setHostname("esp32-device-node");
-        break;
-      case ARDUINO_EVENT_ETH_GOT_IP:
-        {
-          // 以太网获取到 IP 地址
-          IPAddress ip = ETH.localIP();
-          Serial.printf("LAN IP: %s\n", ip.toString().c_str());
-          statusMessage = "Ethernet Connected: " + ip.toString();
-          break;
-        }
-      case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-        {
-          // WiFi 获取到 IP 地址
-          IPAddress ip = WiFi.localIP();
-          Serial.printf("WiFi IP: %s\n", ip.toString().c_str());
-          statusMessage = "WiFi Connected: " + ip.toString();
-          break;
-        }
-      default:
-        break;
-    }
-  });
-
-  // 初始化以太网 (优先使用)
-  ETH.begin(ETH_TYPE, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLK_MODE);
-
-  // 如果配置了 WiFi SSID，则连接 WiFi (作为备用)
-  if (cfg_ssid != "") {
-    WiFi.begin(cfg_ssid.c_str(), cfg_pass.c_str());
-  }
+  Network.begin();
+  Network.onEvent(onNetworkEvent);
+  ethernet_init();
+  ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_CS, ETH_PHY_IRQ, ETH_PHY_RST, SPI);
+  wifi_init();
+  if (cfg_ssid != "")
+    WiFi.STA.connect(cfg_ssid.c_str(), cfg_pass.c_str());
 }
 
 // --- 初始化 Web 服务器 ---
@@ -188,22 +199,23 @@ void setup() {
   // 步骤 5: 初始化 MQTT 主题字符串（MAC 地址确定后）
   initMQTTTopics();
 
-  // 步骤 6: 配置 MQTT 服务器
-  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
-  mqttClient.setCallback(mqttCallback);
-
-  // 步骤 7: 初始化 Web 服务器
-  initWebServer();
-
-  // 步骤 8: 等待网络连接（最多等待10秒）
+  // 步骤 6: 等待网络连接（最多等待10秒）
   unsigned long startWait = millis();
   while (
     !ETH.linkUp()                     // 以太网链路未建立
     && WiFi.status() != WL_CONNECTED  // WiFi 未连接
+    && !Network.isOnline()            // 网络未在线
     && millis() - startWait < 10000   // 等待时间超过10秒
   ) {
     delay(100);
   }
+
+  // 步骤 7: 配置 MQTT 服务器
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(mqttCallback);
+
+  // 步骤 8: 初始化 Web 服务器
+  initWebServer();
 
   // 步骤 9: 判断启动模式
   // 情况 1: 如果打印机 IP 为空 -> 进入扫描模式
@@ -224,8 +236,7 @@ void loop() {
   snmp.loop();            // 处理 SNMP 消息
   mqttLoop();             // 处理 MQTT 连接
 
-  // 如果正在扫描模式，执行扫描循环
-  if (isScanning) {
+  if (isScanning) {     // 如果正在扫描模式，执行扫描循环
     processScanLoop();  // 扫描模式处理
   }
 
