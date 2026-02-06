@@ -58,14 +58,16 @@ void onNetworkEvent(arduino_event_id_t event) {
     case ARDUINO_EVENT_ETH_GOT_IP:
       {
         IPAddress ip = ETH.localIP();
-        Serial.printf("LAN IP: %s\n", ip.toString().c_str());
-        statusMessage = "Ethernet Connected: " + ip.toString();
+        deviceIP = ip.toString();
+        Serial.printf("LAN IP: %s\n", deviceIP.c_str());
+        statusMessage = "Ethernet Connected: " + deviceIP;
         Network.setDefaultInterface(ETH);
         break;
       }
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
       {
         IPAddress ip = WiFi.localIP();
+        if (!ETH.linkUp() || !ETH.hasIP()) deviceIP = ip.toString();
         Serial.printf("WiFi IP: %s\n", ip.toString().c_str());
         statusMessage = "WiFi Connected: " + ip.toString();
         break;
@@ -179,7 +181,7 @@ void setup() {
 
   // 打印机锁定引脚：输出模式，默认低电平（锁定）
   pinMode(PRINTER_LOCK_PIN, OUTPUT);
-  digitalWrite(PRINTER_LOCK_PIN, LOW);
+  setPrinterLockPin(LOW);
 
   // 步骤 2: 初始化网络
   initNetwork();

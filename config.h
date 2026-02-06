@@ -17,11 +17,10 @@
 //          配置区
 // ==========================================
 // MQTT 服务器配置
-#define MQTT_BROKER "192.168.14.70"       // MQTT 服务器 IP 地址
-#define MQTT_PORT 1883                    // MQTT 端口
-#define MQTT_USER "admin"                 // MQTT 用户名
-#define MQTT_PASS "admin123"              // MQTT 密码
-#define MQTT_TOPIC_PREFIX "printer/data"  // MQTT 主题前缀
+#define MQTT_BROKER "192.168.14.70"  // MQTT 服务器 IP 地址
+#define MQTT_PORT 1883               // MQTT 端口
+#define MQTT_USER "admin"            // MQTT 用户名
+#define MQTT_PASS "admin123"         // MQTT 密码
 
 // --- NodeMCU-32S + W5500 (SPI) 以太网引脚配置 ---
 #define ETH_PHY_TYPE ETH_PHY_W5500  // 以太网 PHY 芯片类型 (W5500)

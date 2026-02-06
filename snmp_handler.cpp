@@ -13,6 +13,7 @@
 // --- SNMP 消息回调函数 ---
 // 当收到 SNMP 响应时，此函数会被调用
 void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const uint16_t port) {
+  static String lastInitSerial;  // 与 mqtt 侧“序列号变化才发 init”共用，扫描锁定后也更新避免 else 里再发一次
   // 获取 SNMP 响应中的变量绑定列表
   SNMP::VarBindList* varbindlist = message->getVarBindList();
   String currentSerial = "";  // 当前收到的序列号
@@ -85,6 +86,8 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
         remoteIP.reserve(16);
         remoteIP = remote.toString();
         foundPrinter(remoteIP);
+        sendInitToMQTT();
+        lastInitSerial = val_PrtSerial;
       } else {
         // 序列号不匹配，跳过
         IPAddress remoteIP = remote;
@@ -98,6 +101,8 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
       remoteIP.reserve(16);
       remoteIP = remote.toString();
       foundPrinter(remoteIP);
+      sendInitToMQTT();
+      lastInitSerial = val_PrtSerial;
     }
   } else {
     // 锁定状态：正常计算与上传数据
@@ -123,6 +128,10 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
     if (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0) {
       sendDataToMQTT();                   // 发送数据到 MQTT
       last_sent_SysTotal = val_SysTotal;  // 更新已发送的系统总数，避免重复上报
+    }
+    if (lastInitSerial != val_PrtSerial) {
+      sendInitToMQTT();
+      lastInitSerial = val_PrtSerial;
     }
   }
 }

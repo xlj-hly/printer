@@ -32,6 +32,7 @@ extern String cfg_target_serial;  // 目标打印机序列号 (用于精确搜�
 // --- 系统状态变量 ---
 extern String statusMessage;           // 当前状态消息
 extern String deviceMAC;               // 设备 MAC 地址
+extern String deviceIP;                // 本机 IP（网络事件中更新，以太网优先）
 extern unsigned long lastRequestTime;  // 上次 SNMP 请求时间
 extern bool isScanning;                // 是否正在扫描模式
 extern int scanCurrentIP;              // 当前扫描的 IP 地址 (最后一位)
@@ -55,9 +56,15 @@ extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 extern int last_sent_SysTotal;  // 上次发送的系统总数，用于检测变化
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
-extern String mqtt_topic_status;  // printer/data/{MAC}/status
-extern String mqtt_topic_data;    // printer/data/{MAC}
-extern String mqtt_topic_ota;     // printer/data/{MAC}/ota/update
-extern String mqtt_topic_lock;    // printer/data/{MAC}/lock，payload: lock/unlock
+extern String mqtt_topic_status;      // printer/{MAC}/status
+extern String mqtt_topic_init;        // printer/{MAC}/init，初始化发一次
+extern String mqtt_topic_data;        // printer/{MAC}/data
+extern String mqtt_topic_ota;         // server/{MAC}/ota/update
+extern String mqtt_topic_lock;        // server/{MAC}/lock，接收 lock/unlock
+extern String mqtt_topic_lock_state;  // printer/{MAC}/lock，发送 lock/unlock
+
+// --- 打印机锁定状态 (与引脚同步，值为 "lock"/"unlock") ---
+extern String printerLockPinState;  // 当前输出电平 HIGH/LOW，只读；修改请用 setPrinterLockPin()
+void setPrinterLockPin(int level);  // 写引脚并更新 printerLockPinState
 
 #endif  // GLOBALS_H

@@ -14,37 +14,46 @@
 #include "ota.h"
 
 // MQTT 主题常量
-static const char* MQTT_TOPIC_BROADCAST_UPDATE = "printer/ota/broadcast/update";  // 接收 | 广播更新
+static const char* MQTT_TOPIC_BROADCAST_UPDATE = "server/ota/broadcast/update";  // 接收 | 广播更新
 
 // --- 初始化 MQTT 主题 ---
 // 在获取 MAC 地址后调用，构建所有 MQTT 主题字符串
 void initMQTTTopics() {
-  // 构建状态主题: printer/data/{MAC}/status | 发送 | 上报状态
-  mqtt_topic_status.reserve(strlen(MQTT_TOPIC_PREFIX) + deviceMAC.length() + 8);
-  mqtt_topic_status = MQTT_TOPIC_PREFIX;
-  mqtt_topic_status += "/";
+  // 构建状态主题: printer/{MAC}/status | 发送 | 上报状态
+  mqtt_topic_status.reserve(8 + deviceMAC.length() + 8);
+  mqtt_topic_status = "printer/";
   mqtt_topic_status += deviceMAC;
   mqtt_topic_status += "/status";
 
-  // 构建数据主题: printer/data/{MAC} | 发送 | 上报数据
-  mqtt_topic_data.reserve(strlen(MQTT_TOPIC_PREFIX) + deviceMAC.length() + 2);
-  mqtt_topic_data = MQTT_TOPIC_PREFIX;
-  mqtt_topic_data += "/";
-  mqtt_topic_data += deviceMAC;
+  // 构建初始化主题: printer/{MAC}/init | 发送 | 初始化发一次
+  mqtt_topic_init.reserve(8 + deviceMAC.length() + 6);
+  mqtt_topic_init = "printer/";
+  mqtt_topic_init += deviceMAC;
+  mqtt_topic_init += "/init";
 
-  // 构建 OTA 主题: printer/data/{MAC}/ota/update | 接收 | 个人更新
-  mqtt_topic_ota.reserve(strlen(MQTT_TOPIC_PREFIX) + deviceMAC.length() + 12);
-  mqtt_topic_ota = MQTT_TOPIC_PREFIX;
-  mqtt_topic_ota += "/";
+  // 构建数据主题: printer/{MAC}/data | 发送 | 上报数据
+  mqtt_topic_data.reserve(8 + deviceMAC.length() + 7);
+  mqtt_topic_data = "printer/";
+  mqtt_topic_data += deviceMAC;
+  mqtt_topic_data += "/data";
+
+  // 构建 OTA 主题: server/{MAC}/ota/update | 接收 | 个人更新
+  mqtt_topic_ota.reserve(8 + deviceMAC.length() + 12);
+  mqtt_topic_ota = "server/";
   mqtt_topic_ota += deviceMAC;
   mqtt_topic_ota += "/ota/update";
 
-  // 构建锁定控制主题: printer/data/{MAC}/lock | 接收 | payload: lock / unlock
-  mqtt_topic_lock.reserve(strlen(MQTT_TOPIC_PREFIX) + deviceMAC.length() + 7);
-  mqtt_topic_lock = MQTT_TOPIC_PREFIX;
-  mqtt_topic_lock += "/";
+  // 构建锁定控制主题: server/{MAC}/lock | 接收 | payload: lock / unlock
+  mqtt_topic_lock.reserve(8 + deviceMAC.length() + 6);
+  mqtt_topic_lock = "server/";
   mqtt_topic_lock += deviceMAC;
   mqtt_topic_lock += "/lock";
+
+  // 构建锁定状态主题: printer/{MAC}/lock | 发送 | payload: lock/unlock
+  mqtt_topic_lock_state.reserve(8 + deviceMAC.length() + 6);
+  mqtt_topic_lock_state = "printer/";
+  mqtt_topic_lock_state += deviceMAC;
+  mqtt_topic_lock_state += "/lock";
 }
 
 // --- 连接 MQTT ---
@@ -52,9 +61,9 @@ void connectMQTT() {
   // 使用设备 MAC 地址生成唯一的客户端 ID（预分配内存减少碎片）
   String clientId;
   clientId.reserve(deviceMAC.length() + 6);
-  clientId = "WT32-";
-  clientId += deviceMAC;      // 例如: "WT32-AA:BB:CC:DD:EE:FF"
-  clientId.replace(":", "");  // 移除冒号: "WT32-AABBCCDDEEFF"
+  clientId = "c-";
+  clientId += deviceMAC;  // 例如: "c-AA:BB:CC:DD:EE:FF"
+  // clientId.replace(":", "");  // 移除冒号: "c-AABBCCDDEEFF"
 
   const char* willMessage = "offline";  // 遗嘱消息内容
 
@@ -63,56 +72,52 @@ void connectMQTT() {
   if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASS,
                          mqtt_topic_status.c_str(), 1, true, willMessage)) {
     Serial.println("✅ MQTT Connected!");
-    // 发送在线状态消息
     mqttClient.publish(mqtt_topic_status.c_str(), "online", true);
 
     // 订阅 OTA 主题
     mqttClient.subscribe(mqtt_topic_ota.c_str());
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
     mqttClient.subscribe(mqtt_topic_lock.c_str());
-    Serial.println("已订阅主题:");
-    Serial.printf("  - OTA 个人更新主题: %s\n", mqtt_topic_ota.c_str());
-    Serial.printf("  - OTA 广播更新主题: %s\n", MQTT_TOPIC_BROADCAST_UPDATE);
-    Serial.printf("  - 锁机控制主题: %s \n", mqtt_topic_lock.c_str());
   }
 }
 
 // --- MQTT 连接管理循环 ---
-// 负责维护 MQTT 连接，处理重连和心跳
+// 负责维护 MQTT 连接、重连；用状态变化检测掉线
 void mqttLoop() {
+  static bool wasConnected = false;
+  bool nowConnected = mqttClient.connected();
 
-  // 如果未连接，尝试重连
-  if (!mqttClient.connected()) {
+  if (wasConnected && !nowConnected) {
+    // TODO: 掉线逻辑
+    Serial.println("⚠️ MQTT 已断开");
+    setPrinterLockPin(LOW);
+    wasConnected = false;
+  }
+  wasConnected = nowConnected;  // 保存当前状态
+
+  if (!nowConnected) {
     static unsigned long lastMqttRetry = 0;
     if (millis() - lastMqttRetry > 5000) {
       lastMqttRetry = millis();
       connectMQTT();
     }
   } else {
-    // 已连接，处理 MQTT 消息循环
     mqttClient.loop();
-
-    // 每 30 秒发送一次系统信息
-    static unsigned long lastHeartbeat = 0;
-    if (millis() - lastHeartbeat > 30000) {
-      lastHeartbeat = millis();
-
-      // 获取 IP 地址
-      IPAddress ip = ETH.localIP();
-      if (ip == IPAddress(0, 0, 0, 0)) ip = WiFi.localIP();
-
-      StaticJsonDocument<200> doc;  // 栈上分配, 预分配 200 字节
-      doc["mac"] = deviceMAC;
-      doc["version"] = FIRMWARE_VERSION;
-      doc["status"] = "online";
-      doc["ip"] = ip.toString();
-      doc["cfg_target_serial"] = cfg_target_serial;
-
-      String json;
-      serializeJson(doc, json);
-      mqttClient.publish(mqtt_topic_status.c_str(), json.c_str(), true);  // 保留消息
-    }
   }
+}
+
+// --- 发送 init 到 MQTT（获取到 val_PrtSerial 后调用）---
+void sendInitToMQTT() {
+  if (!mqttClient.connected() || val_PrtSerial.length() == 0) return;
+
+  StaticJsonDocument<160> doc;
+  doc["version"] = FIRMWARE_VERSION;
+  doc["mac"] = deviceMAC;
+  doc["ip"] = deviceIP;
+  doc["serial"] = val_PrtSerial;
+  String json;
+  serializeJson(doc, json);
+  mqttClient.publish(mqtt_topic_init.c_str(), json.c_str());
 }
 
 // --- 发送数据到 MQTT 服务器 ---
@@ -120,11 +125,14 @@ void sendDataToMQTT() {
   // 检查 MQTT 连接状态
   if (!mqttClient.connected()) return;
 
-  StaticJsonDocument<150> doc;
+  StaticJsonDocument<180> doc;
   doc["mac"] = deviceMAC;
-  doc["status"] = "online";
-  doc["msg"] = "打印了";
-  doc["st"] = val_SysTotal;
+  doc["st"] = val_SysTotal;           // 系统总打印数
+  doc["serial"] = val_PrtSerial;      // 打印机序列号
+  doc["col_copies"] = val_ColCopies;  // 彩色复印数
+  doc["bw_copies"] = val_BWCopies;    // 黑白复印数
+  doc["col_prints"] = val_ColPrints;  // 彩色打印数
+  doc["bw_prints"] = val_BWPrints;    // 黑白打印数
 
   String json;
   serializeJson(doc, json);
@@ -132,6 +140,12 @@ void sendDataToMQTT() {
 
   // 发送数据
   mqttClient.publish(mqtt_topic_data.c_str(), json.c_str());
+}
+
+// --- 发送锁定状态到 MQTT ---
+void sendLockStateToMQTT() {
+  if (!mqttClient.connected()) return;
+  mqttClient.publish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
 }
 
 // --- 更新固件 ---
@@ -163,7 +177,7 @@ void updateFirmware(const String& jsonMessage) {
 
 // --- 锁定打印机 ---
 void printerLock(bool lock) {
-  digitalWrite(PRINTER_LOCK_PIN, lock ? LOW : HIGH);  // 高电平解锁，低电平锁定
+  setPrinterLockPin(lock ? LOW : HIGH);  // 高电平解锁，低电平锁定
   Serial.println(lock ? "✅ 锁定打印机..." : "✅ 解锁打印机...");
 }
 
