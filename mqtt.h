@@ -27,6 +27,9 @@ void sendDataToMQTT();
 // 发送锁定状态到 MQTT（内部由 setPrinterLockPin 调用）
 void sendLockStateToMQTT();
 
+// 发送 OID 查询结果到 server/oid/{MAC}
+void publishOidResult(const String& json);
+
 // MQTT 消息回调函数
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 

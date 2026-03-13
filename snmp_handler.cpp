@@ -8,16 +8,69 @@
 #include "config.h"
 #include "globals.h"
 #include "mqtt.h"
+#include <ArduinoJson.h>
 #include <cstring>
+
+// 将 SNMP BER 值转为字符串
+static String snmpValueToString(SNMP::BER* value) {
+  if (!value) return "";
+  if (value->getType() == SNMP::Type::OctetString) {
+    return String(static_cast<SNMP::OctetStringBER*>(value)->getValue());
+  }
+  if (value->getType() == SNMP::Type::Integer) {
+    return String(static_cast<SNMP::IntegerBER*>(value)->getValue());
+  }
+  if (value->getType() == SNMP::Type::Counter32) {
+    return String(static_cast<SNMP::Counter32BER*>(value)->getValue());
+  }
+  if (value->getType() == SNMP::Type::Gauge32) {
+    return String(static_cast<SNMP::Gauge32BER*>(value)->getValue());
+  }
+  return "";
+}
 
 // --- SNMP 消息回调函数 ---
 // 当收到 SNMP 响应时，此函数会被调用
 void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const uint16_t port) {
-  static String lastInitSerial;  // 与 mqtt 侧“序列号变化才发 init”共用，扫描锁定后也更新避免 else 里再发一次
-  // 获取 SNMP 响应中的变量绑定列表
   SNMP::VarBindList* varbindlist = message->getVarBindList();
-  String currentSerial = "";  // 当前收到的序列号
-  currentSerial.reserve(32);  // 预分配内存
+
+  // 优先处理按需 OID 查询的响应（仅当响应中的 OID 均在请求列表中时认定为本次查询）
+  if (pendingOidRequest && remote.toString() == pendingOidTarget) {
+    StaticJsonDocument<256> reqDoc;
+    if (!deserializeJson(reqDoc, pendingOidJson) && reqDoc.is<JsonArray>()) {
+      JsonArray reqArr = reqDoc.as<JsonArray>();
+      bool allMatch = true;
+      for (unsigned int i = 0; i < varbindlist->count() && allMatch; ++i) {
+        const char* name = (*varbindlist)[i]->getName();
+        bool found = false;
+        for (JsonVariant v : reqArr) {
+          if (strcmp(v.as<const char*>(), name) == 0) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) allMatch = false;
+      }
+      if (allMatch && varbindlist->count() > 0) {
+        StaticJsonDocument<512> doc;
+        for (unsigned int i = 0; i < varbindlist->count(); ++i) {
+          SNMP::VarBind* vb = (*varbindlist)[i];
+          doc[vb->getName()] = snmpValueToString(vb->getValue());
+        }
+        String json;
+        serializeJson(doc, json);
+        publishOidResult(json);
+        pendingOidRequest = false;
+        pendingOidTarget = "";
+        pendingOidJson = "";
+        return;
+      }
+    }
+  }
+
+  static String lastInitSerial;
+  String currentSerial = "";
+  currentSerial.reserve(32);
 
   // 遍历所有变量绑定，解析每个 OID 的值
   for (unsigned int index = 0; index < varbindlist->count(); ++index) {
@@ -160,5 +213,27 @@ void sendSNMPRequest(IPAddress target) {
   }
 
   // 释放消息内存
+  delete message;
+}
+
+// --- 按 OID 列表请求，结果由 onSNMPMessage 收到后发到 server/oid/{MAC} ---
+void sendSNMPOidRequest(IPAddress target, const String& oidsJson) {
+  StaticJsonDocument<384> doc;
+  if (deserializeJson(doc, oidsJson) || !doc.is<JsonArray>()) return;
+
+  JsonArray arr = doc.as<JsonArray>();
+  if (arr.size() == 0) return;
+
+  SNMP::Message* message = new SNMP::Message(SNMP::Version::V1, "public", SNMP::Type::GetRequest);
+  for (JsonVariant v : arr) {
+    const char* oid = v.as<const char*>();
+    if (oid && strlen(oid) > 0) message->add(oid, new SNMP::NullBER());
+  }
+
+  if (snmp.send(message, target, 161)) {
+    pendingOidRequest = true;
+    pendingOidTarget = target.toString();
+    pendingOidJson = oidsJson;
+  }
   delete message;
 }

@@ -19,4 +19,7 @@ void sendSNMPRequest(IPAddress target);
 // 找到打印机后的处理
 void foundPrinter(String targetIP);
 
+// 按 OID 列表请求（payload 为 JSON 数组字符串），结果通过 MQTT server/oid/{MAC} 上报
+void sendSNMPOidRequest(IPAddress target, const String& oidsJson);
+
 #endif  // SNMP_HANDLER_H

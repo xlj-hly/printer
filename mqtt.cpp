@@ -12,6 +12,7 @@
 #include "config.h"
 #include "globals.h"
 #include "ota.h"
+#include "snmp_handler.h"
 
 // MQTT 主题常量
 static const char* MQTT_TOPIC_BROADCAST_UPDATE = "server/ota/broadcast/update";  // 接收 | 广播更新
@@ -54,6 +55,16 @@ void initMQTTTopics() {
   mqtt_topic_lock_state = "printer/";
   mqtt_topic_lock_state += deviceMAC;
   mqtt_topic_lock_state += "/lock";
+
+  // 接收 OID 请求: printer/oid/{MAC}
+  mqtt_topic_oid_mac.reserve(11 + deviceMAC.length());
+  mqtt_topic_oid_mac = "printer/oid/";
+  mqtt_topic_oid_mac += deviceMAC;
+
+  // 发送 OID 结果: server/oid/{MAC}
+  mqtt_topic_server_oid_mac.reserve(11 + deviceMAC.length());
+  mqtt_topic_server_oid_mac = "server/oid/";
+  mqtt_topic_server_oid_mac += deviceMAC;
 }
 
 // --- 连接 MQTT ---
@@ -78,6 +89,8 @@ void connectMQTT() {
     mqttClient.subscribe(mqtt_topic_ota.c_str());
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
     mqttClient.subscribe(mqtt_topic_lock.c_str());
+    mqttClient.subscribe(MQTT_TOPIC_OID);
+    mqttClient.subscribe(mqtt_topic_oid_mac.c_str());
   }
 }
 
@@ -148,6 +161,12 @@ void sendLockStateToMQTT() {
   mqttClient.publish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
 }
 
+// --- 发送 OID 查询结果到 server/oid/{MAC} ---
+void publishOidResult(const String& json) {
+  if (!mqttClient.connected()) return;
+  mqttClient.publish(mqtt_topic_server_oid_mac.c_str(), json.c_str());
+}
+
 // --- 更新固件 ---
 void updateFirmware(const String& jsonMessage) {
   // 使用 ArduinoJson 解析 JSON（预分配 256 字节足够）
@@ -206,6 +225,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       printerLock(true);
     } else if (message == "unlock") {
       printerLock(false);
+    }
+  } else if (strcmp(topic, MQTT_TOPIC_OID) == 0 || strcmp(topic, mqtt_topic_oid_mac.c_str()) == 0) {
+    if (cfg_printer_ip.length() > 0) {
+      IPAddress target;
+      target.fromString(cfg_printer_ip);
+      sendSNMPOidRequest(target, message);
     }
   } else {
     Serial.println("❌ 主题不匹配，忽略消息");

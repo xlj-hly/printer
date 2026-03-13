@@ -56,12 +56,19 @@ extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 extern int last_sent_SysTotal;  // 上次发送的系统总数，用于检测变化
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
-extern String mqtt_topic_status;      // printer/{MAC}/status
-extern String mqtt_topic_init;        // printer/{MAC}/init，初始化发一次
-extern String mqtt_topic_data;        // printer/{MAC}/data
-extern String mqtt_topic_ota;         // server/{MAC}/ota/update
-extern String mqtt_topic_lock;        // server/{MAC}/lock，接收 lock/unlock
-extern String mqtt_topic_lock_state;  // printer/{MAC}/lock，发送 lock/unlock
+extern String mqtt_topic_status;          // printer/{MAC}/status
+extern String mqtt_topic_init;            // printer/{MAC}/init，初始化发一次
+extern String mqtt_topic_data;            // printer/{MAC}/data
+extern String mqtt_topic_ota;             // server/{MAC}/ota/update
+extern String mqtt_topic_lock;            // server/{MAC}/lock，接收 lock/unlock
+extern String mqtt_topic_lock_state;      // printer/{MAC}/lock，发送 lock/unlock
+extern String mqtt_topic_oid_mac;         // printer/oid/{MAC}，接收 OID 请求
+extern String mqtt_topic_server_oid_mac;  // server/oid/{MAC}，发送 OID 查询结果
+
+// --- OID 按需查询状态（SNMP 响应与 MQTT 请求匹配）---
+extern bool pendingOidRequest;
+extern String pendingOidTarget;
+extern String pendingOidJson;
 
 // --- 打印机锁定状态 (与引脚同步，值为 "lock"/"unlock") ---
 extern String printerLockPinState;  // 当前输出电平 HIGH/LOW，只读；修改请用 setPrinterLockPin()
