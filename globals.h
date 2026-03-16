@@ -60,6 +60,7 @@ extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 
 // --- MQTT 发送控制（仅 mqtt 在连接时更新）---
 extern int last_sent_SysTotal;
+extern bool last_sent_had_valid_toner;
 extern String lastInitSerial;
 extern String last_sent_lock;
 extern String pendingOidResult;  // OID 查询结果待发送

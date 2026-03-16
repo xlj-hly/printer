@@ -51,6 +51,7 @@ int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 
 // --- MQTT 发送控制 ---
 int last_sent_SysTotal = -1;
+bool last_sent_had_valid_toner = false;
 String lastInitSerial = "";
 String last_sent_lock = "";
 String pendingOidResult = "";

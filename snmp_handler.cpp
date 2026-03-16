@@ -204,11 +204,11 @@ void sendSNMPRequest(IPAddress target) {
 
   // 如果不在扫描模式，才读取计数器 (减少扫描时的数据包大小，提高扫描速度)
   if (!isScanning) {
-    message->add(OID_SYS_TOTAL, new SNMP::NullBER());   // 系统总打印数
-    message->add(OID_COL_COPIES, new SNMP::NullBER());  // 彩色复印数
-    message->add(OID_BW_COPIES, new SNMP::NullBER());   // 黑白复印数
-    message->add(OID_COL_PRINTS, new SNMP::NullBER());  // 彩色打印数
-    message->add(OID_BW_PRINTS, new SNMP::NullBER());   // 黑白打印数
+    message->add(OID_SYS_TOTAL, new SNMP::NullBER());
+    message->add(OID_COL_COPIES, new SNMP::NullBER());
+    message->add(OID_BW_COPIES, new SNMP::NullBER());
+    message->add(OID_COL_PRINTS, new SNMP::NullBER());
+    message->add(OID_BW_PRINTS, new SNMP::NullBER());
   }
 
   // 发送 SNMP 请求到目标 IP 的 161 端口 (SNMP 标准端口)
@@ -220,7 +220,7 @@ void sendSNMPRequest(IPAddress target) {
   delete message;
 }
 
-// --- 单独请求碳粉余量（与 server/oid 相同方式，打印机单独请求时返回正常）---
+// --- 单独请求碳粉（Ricoh 合并请求时只返回前 6 项，不返回碳粉）---
 void sendTonerRequest(IPAddress target) {
   SNMP::Message* message = new SNMP::Message(SNMP::Version::V1, "public", SNMP::Type::GetRequest);
   message->add(OID_TONER_BLACK, new SNMP::NullBER());

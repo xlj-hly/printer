@@ -126,7 +126,7 @@ void printerSNMPLoop() {
     IPAddress target;
     target.fromString(cfg_printer_ip);
     sendSNMPRequest(target);
-    sendTonerRequest(target);  // 碳粉单独请求，与 server/oid 相同方式
+    sendTonerRequest(target);
   }
 }
 

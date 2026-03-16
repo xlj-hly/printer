@@ -151,7 +151,10 @@ static void flushPendingMQTT() {
     mqttPublish(mqtt_topic_init.c_str(), json.c_str());
     lastInitSerial = val_PrtSerial;
   }
-  if (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0) {
+  bool hasValidToner = val_TonerBlack >= 0 || val_TonerCyan >= 0 || val_TonerRed >= 0 || val_TonerYellow >= 0;
+  bool needSendData = (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0)
+                      || (val_SysTotal == last_sent_SysTotal && val_SysTotal > 0 && !last_sent_had_valid_toner && hasValidToner);
+  if (needSendData) {
     StaticJsonDocument<256> doc;
     doc["mac"] = deviceMAC;
     doc["st"] = val_SysTotal;
@@ -169,6 +172,7 @@ static void flushPendingMQTT() {
     mqttPublish(mqtt_topic_data.c_str(), json.c_str());
     Serial.printf("📤 MQTT Sent: %s\n", json.c_str());
     last_sent_SysTotal = val_SysTotal;
+    last_sent_had_valid_toner = hasValidToner;
   }
   if (printerLockPinState != last_sent_lock) {
     mqttPublish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
