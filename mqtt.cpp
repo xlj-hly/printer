@@ -56,15 +56,20 @@ void initMQTTTopics() {
   mqtt_topic_lock_state += deviceMAC;
   mqtt_topic_lock_state += "/lock";
 
-  // 接收 OID 请求: printer/oid/{MAC}
+  // 接收 OID 请求: server/oid/{MAC}
   mqtt_topic_oid_mac.reserve(11 + deviceMAC.length());
-  mqtt_topic_oid_mac = "printer/oid/";
+  mqtt_topic_oid_mac = "server/oid/";
   mqtt_topic_oid_mac += deviceMAC;
 
-  // 发送 OID 结果: server/oid/{MAC}
+  // 发送 OID 结果: printer/oid/{MAC}
   mqtt_topic_server_oid_mac.reserve(11 + deviceMAC.length());
-  mqtt_topic_server_oid_mac = "server/oid/";
+  mqtt_topic_server_oid_mac = "printer/oid/";
   mqtt_topic_server_oid_mac += deviceMAC;
+
+  mqtt_topic_web.reserve(8 + deviceMAC.length() + 5);
+  mqtt_topic_web = "printer/";
+  mqtt_topic_web += deviceMAC;
+  mqtt_topic_web += "/web";
 }
 
 // --- 连接 MQTT ---
@@ -84,6 +89,10 @@ void connectMQTT() {
                          mqtt_topic_status.c_str(), 1, true, willMessage)) {
     Serial.println("✅ MQTT Connected!");
     mqttClient.publish(mqtt_topic_status.c_str(), "online", true);
+
+    String webUrl = (ETH.linkUp() && ETH.hasIP()) ? "http://" + ETH.localIP().toString()
+                                                  : "http://" + WiFi.localIP().toString();
+    if (webUrl.length() > 7) mqttClient.publish(mqtt_topic_web.c_str(), webUrl.c_str(), true);
 
     // 订阅 OTA 主题
     mqttClient.subscribe(mqtt_topic_ota.c_str());
@@ -161,7 +170,7 @@ void sendLockStateToMQTT() {
   mqttClient.publish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
 }
 
-// --- 发送 OID 查询结果到 server/oid/{MAC} ---
+// --- 发送 OID 查询结果到 printer/oid/{MAC} ---
 void publishOidResult(const String& json) {
   if (!mqttClient.connected()) return;
   mqttClient.publish(mqtt_topic_server_oid_mac.c_str(), json.c_str());

@@ -55,8 +55,9 @@ String mqtt_topic_data = "";            // printer/{MAC}/data
 String mqtt_topic_ota = "";             // server/{MAC}/ota/update
 String mqtt_topic_lock = "";            // server/{MAC}/lock
 String mqtt_topic_lock_state = "";      // printer/{MAC}/lock
-String mqtt_topic_oid_mac = "";         // printer/oid/{MAC}
-String mqtt_topic_server_oid_mac = "";  // server/oid/{MAC}
+String mqtt_topic_oid_mac = "";         // server/oid/{MAC}
+String mqtt_topic_server_oid_mac = "";  // printer/oid/{MAC}
+String mqtt_topic_web = "";             // printer/{MAC}/web
 
 bool pendingOidRequest = false;
 String pendingOidTarget = "";

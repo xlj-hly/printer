@@ -62,8 +62,9 @@ extern String mqtt_topic_data;            // printer/{MAC}/data
 extern String mqtt_topic_ota;             // server/{MAC}/ota/update
 extern String mqtt_topic_lock;            // server/{MAC}/lock，接收 lock/unlock
 extern String mqtt_topic_lock_state;      // printer/{MAC}/lock，发送 lock/unlock
-extern String mqtt_topic_oid_mac;         // printer/oid/{MAC}，接收 OID 请求
-extern String mqtt_topic_server_oid_mac;  // server/oid/{MAC}，发送 OID 查询结果
+extern String mqtt_topic_oid_mac;         // server/oid/{MAC}，接收 OID 请求
+extern String mqtt_topic_server_oid_mac;  // printer/oid/{MAC}，发送 OID 查询结果
+extern String mqtt_topic_web;             // printer/{MAC}/web，Web 配置页地址
 
 // --- OID 按需查询状态（SNMP 响应与 MQTT 请求匹配）---
 extern bool pendingOidRequest;

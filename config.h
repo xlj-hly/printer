@@ -11,7 +11,7 @@
 // ==========================================
 //          固件版本
 // ==========================================
-#define FIRMWARE_VERSION "0.0.19"
+#define FIRMWARE_VERSION "0.0.2"
 
 // ==========================================
 //          配置区
@@ -21,7 +21,7 @@
 #define MQTT_PORT 1883                // MQTT 端口
 #define MQTT_USER "admin"             // MQTT 用户名
 #define MQTT_PASS "admin123"          // MQTT 密码
-#define MQTT_TOPIC_OID "printer/oid"  // 查找对应oid数据 printer/oid
+#define MQTT_TOPIC_OID "server/oid"   // 接收 OID 请求（广播）
 
 // --- NodeMCU-32S + W5500 (SPI) 以太网引脚配置 ---
 #define ETH_PHY_TYPE ETH_PHY_W5500  // 以太网 PHY 芯片类型 (W5500)

@@ -216,7 +216,7 @@ void sendSNMPRequest(IPAddress target) {
   delete message;
 }
 
-// --- 按 OID 列表请求，结果由 onSNMPMessage 收到后发到 server/oid/{MAC} ---
+// --- 按 OID 列表请求，结果由 onSNMPMessage 收到后发到 printer/oid/{MAC} ---
 void sendSNMPOidRequest(IPAddress target, const String& oidsJson) {
   StaticJsonDocument<384> doc;
   if (deserializeJson(doc, oidsJson) || !doc.is<JsonArray>()) return;

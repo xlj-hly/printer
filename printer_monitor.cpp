@@ -23,7 +23,7 @@ void startScan() {
     statusMessage = "Scanning for Serial: ";
     statusMessage += cfg_target_serial;
   } else {
-    statusMessage = "Scanning for ANY Printer...";
+    statusMessage = "正在扫描打印机...";
   }
   Serial.println(statusMessage);
 }
