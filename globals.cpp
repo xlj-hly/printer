@@ -6,7 +6,6 @@
 
 #include "globals.h"
 #include "config.h"
-#include "mqtt.h"
 
 // --- 全局对象实例 ---
 WebServer server(80);                // Web 服务器，端口 80
@@ -51,7 +50,10 @@ int calc_BWCopies = 0;   // 黑白复印数 (从SNMP直接读取)
 int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 
 // --- MQTT 发送控制 ---
-int last_sent_SysTotal = -1;  // 上次发送的系统总数，用于检测变化
+int last_sent_SysTotal = -1;
+String lastInitSerial = "";
+String last_sent_lock = "";
+String pendingOidResult = "";
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
 String mqtt_topic_status = "";          // printer/{MAC}/status
@@ -74,5 +76,4 @@ String printerLockPinState = "lock";
 void setPrinterLockPin(int level) {
   digitalWrite(PRINTER_LOCK_PIN, level);
   printerLockPinState = level ? "unlock" : "lock";
-  sendLockStateToMQTT();
 }

@@ -7,7 +7,6 @@
 #include "snmp_handler.h"
 #include "config.h"
 #include "globals.h"
-#include "mqtt.h"
 #include <ArduinoJson.h>
 #include <cstdlib>
 #include <cstring>
@@ -60,7 +59,7 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
         }
         String json;
         serializeJson(doc, json);
-        publishOidResult(json);
+        pendingOidResult = json;
         pendingOidRequest = false;
         pendingOidTarget = "";
         pendingOidJson = "";
@@ -69,7 +68,6 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
     }
   }
 
-  static String lastInitSerial;
   String currentSerial = "";
   currentSerial.reserve(32);
 
@@ -159,8 +157,6 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
         remoteIP.reserve(16);
         remoteIP = remote.toString();
         foundPrinter(remoteIP);
-        sendInitToMQTT();
-        lastInitSerial = val_PrtSerial;
       } else {
         // 序列号不匹配，跳过
         IPAddress remoteIP = remote;
@@ -174,8 +170,6 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
       remoteIP.reserve(16);
       remoteIP = remote.toString();
       foundPrinter(remoteIP);
-      sendInitToMQTT();
-      lastInitSerial = val_PrtSerial;
     }
   } else {
     // 锁定状态：正常计算与上传数据
@@ -196,16 +190,6 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
     if (calc_BWPrints < 0) calc_BWPrints = 0;
 
     statusMessage = "Online (SNMP OK)";
-
-    // 只有当系统总数发生变化且大于 0 时才发送 MQTT (避免重复发送)
-    if (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0) {
-      sendDataToMQTT();                   // 发送数据到 MQTT
-      last_sent_SysTotal = val_SysTotal;  // 更新已发送的系统总数，避免重复上报
-    }
-    if (lastInitSerial != val_PrtSerial) {
-      sendInitToMQTT();
-      lastInitSerial = val_PrtSerial;
-    }
   }
 }
 

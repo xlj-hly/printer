@@ -58,8 +58,11 @@ extern int calc_TotCopies;  // 总复印数 = 彩色复印 + 黑白复印
 extern int calc_BWCopies;   // 黑白复印数 (从SNMP直接读取)
 extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 
-// --- MQTT 发送控制 ---
-extern int last_sent_SysTotal;  // 上次发送的系统总数，用于检测变化
+// --- MQTT 发送控制（仅 mqtt 在连接时更新）---
+extern int last_sent_SysTotal;
+extern String lastInitSerial;
+extern String last_sent_lock;
+extern String pendingOidResult;  // OID 查询结果待发送
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
 extern String mqtt_topic_status;          // printer/{MAC}/status

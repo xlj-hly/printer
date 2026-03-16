@@ -17,6 +17,13 @@
 // MQTT 主题常量
 static const char* MQTT_TOPIC_BROADCAST_UPDATE = "server/ota/broadcast/update";  // 接收 | 广播更新
 
+static void flushPendingMQTT();
+
+// --- 底层发送方法（唯一真实 publish，仅在有连接时调用）---
+static void mqttPublish(const char* topic, const char* payload) {
+  mqttClient.publish(topic, payload);
+}
+
 // --- 初始化 MQTT 主题 ---
 // 在获取 MAC 地址后调用，构建所有 MQTT 主题字符串
 void initMQTTTopics() {
@@ -94,6 +101,8 @@ void connectMQTT() {
                                                   : "http://" + WiFi.localIP().toString();
     if (webUrl.length() > 7) mqttClient.publish(mqtt_topic_web.c_str(), webUrl.c_str(), true);
 
+    flushPendingMQTT();
+
     // 订阅 OTA 主题
     mqttClient.subscribe(mqtt_topic_ota.c_str());
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
@@ -125,59 +134,50 @@ void mqttLoop() {
     }
   } else {
     mqttClient.loop();
+    flushPendingMQTT();
   }
 }
 
-// --- 发送 init 到 MQTT（获取到 val_PrtSerial 后调用）---
-void sendInitToMQTT() {
-  if (!mqttClient.connected() || val_PrtSerial.length() == 0) return;
-
-  StaticJsonDocument<160> doc;
-  doc["version"] = FIRMWARE_VERSION;
-  doc["mac"] = deviceMAC;
-  doc["ip"] = deviceIP;
-  doc["serial"] = val_PrtSerial;
-  String json;
-  serializeJson(doc, json);
-  mqttClient.publish(mqtt_topic_init.c_str(), json.c_str());
-}
-
-// --- 发送数据到 MQTT 服务器 ---
-void sendDataToMQTT() {
-  // 检查 MQTT 连接状态
-  if (!mqttClient.connected()) return;
-
-  StaticJsonDocument<256> doc;
-  doc["mac"] = deviceMAC;
-  doc["st"] = val_SysTotal;
-  doc["serial"] = val_PrtSerial;
-  doc["col_copies"] = val_ColCopies;
-  doc["bw_copies"] = val_BWCopies;
-  doc["col_prints"] = val_ColPrints;
-  doc["bw_prints"] = val_BWPrints;
-  doc["toner_black"] = val_TonerBlack;
-  doc["toner_cyan"] = val_TonerCyan;
-  doc["toner_red"] = val_TonerRed;
-  doc["toner_yellow"] = val_TonerYellow;
-
-  String json;
-  serializeJson(doc, json);
-  Serial.printf("📤 MQTT Sent: %s\n", json.c_str());
-
-  // 发送数据
-  mqttClient.publish(mqtt_topic_data.c_str(), json.c_str());
-}
-
-// --- 发送锁定状态到 MQTT ---
-void sendLockStateToMQTT() {
-  if (!mqttClient.connected()) return;
-  mqttClient.publish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
-}
-
-// --- 发送 OID 查询结果到 printer/oid/{MAC} ---
-void publishOidResult(const String& json) {
-  if (!mqttClient.connected()) return;
-  mqttClient.publish(mqtt_topic_server_oid_mac.c_str(), json.c_str());
+// --- 单一调度：读共享状态，按需调用 mqttPublish（仅在有连接时调用）---
+static void flushPendingMQTT() {
+  if (val_PrtSerial != lastInitSerial && val_PrtSerial.length() > 0) {
+    StaticJsonDocument<160> doc;
+    doc["version"] = FIRMWARE_VERSION;
+    doc["mac"] = deviceMAC;
+    doc["ip"] = deviceIP;
+    doc["serial"] = val_PrtSerial;
+    String json;
+    serializeJson(doc, json);
+    mqttPublish(mqtt_topic_init.c_str(), json.c_str());
+    lastInitSerial = val_PrtSerial;
+  }
+  if (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0) {
+    StaticJsonDocument<256> doc;
+    doc["mac"] = deviceMAC;
+    doc["st"] = val_SysTotal;
+    doc["serial"] = val_PrtSerial;
+    doc["col_copies"] = val_ColCopies;
+    doc["bw_copies"] = val_BWCopies;
+    doc["col_prints"] = val_ColPrints;
+    doc["bw_prints"] = val_BWPrints;
+    doc["toner_black"] = val_TonerBlack;
+    doc["toner_cyan"] = val_TonerCyan;
+    doc["toner_red"] = val_TonerRed;
+    doc["toner_yellow"] = val_TonerYellow;
+    String json;
+    serializeJson(doc, json);
+    mqttPublish(mqtt_topic_data.c_str(), json.c_str());
+    Serial.printf("📤 MQTT Sent: %s\n", json.c_str());
+    last_sent_SysTotal = val_SysTotal;
+  }
+  if (printerLockPinState != last_sent_lock) {
+    mqttPublish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
+    last_sent_lock = printerLockPinState;
+  }
+  if (pendingOidResult.length() > 0) {
+    mqttPublish(mqtt_topic_server_oid_mac.c_str(), pendingOidResult.c_str());
+    pendingOidResult = "";
+  }
 }
 
 // --- 更新固件 ---
