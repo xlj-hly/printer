@@ -128,18 +128,22 @@ void initWebServer() {
   server.on("/status", HTTP_GET, []() {
     const char* mqttState = mqttClient.connected() ? "Connected" : "Disconnected";
 
-    StaticJsonDocument<300> doc;
-    doc["serial"] = val_PrtSerial;       // 打印机序列号
-    doc["cc"] = val_ColCopies;           // 彩色复印数
-    doc["cp"] = val_ColPrints;           // 彩色打印数
-    doc["ct"] = calc_ColTotal;           // 彩色总数
-    doc["bc"] = calc_BWCopies;           // 黑白复印数
-    doc["bp"] = calc_BWPrints;           // 黑白打印数
-    doc["bt"] = calc_BWTotal;            // 黑白总数
-    doc["st"] = val_SysTotal;            // 系统总打印数
-    doc["msg"] = statusMessage;          // 状态消息
-    doc["mqtt_state"] = mqttState;       // MQTT 状态
-    doc["detectedIP"] = cfg_printer_ip;  // 打印机 IP 地址
+    StaticJsonDocument<400> doc;
+    doc["serial"] = val_PrtSerial;
+    doc["cc"] = val_ColCopies;
+    doc["cp"] = val_ColPrints;
+    doc["ct"] = calc_ColTotal;
+    doc["bc"] = calc_BWCopies;
+    doc["bp"] = calc_BWPrints;
+    doc["bt"] = calc_BWTotal;
+    doc["st"] = val_SysTotal;
+    doc["toner_black"] = val_TonerBlack;
+    doc["toner_cyan"] = val_TonerCyan;
+    doc["toner_red"] = val_TonerRed;
+    doc["toner_yellow"] = val_TonerYellow;
+    doc["msg"] = statusMessage;
+    doc["mqtt_state"] = mqttState;
+    doc["detectedIP"] = cfg_printer_ip;
 
     String json;
     serializeJson(doc, json);

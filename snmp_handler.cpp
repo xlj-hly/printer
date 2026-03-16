@@ -9,6 +9,7 @@
 #include "globals.h"
 #include "mqtt.h"
 #include <ArduinoJson.h>
+#include <cstdlib>
 #include <cstring>
 
 // 将 SNMP BER 值转为字符串
@@ -93,6 +94,17 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
             val_PrtSerial = octetValue;
           }
         }
+        // 碳粉余量 (OctetString 如 "100")，打印机可能返回带实例后缀的 OID 如 ...5.1.0
+        else if (!isScanning) {
+          int tonerVal = atoi(octetValue);
+          size_t len;
+#define MATCH_TONER_OID(oid) ((len = strlen(oid)) <= nameLen && strncmp(name, oid, len) == 0 && (name[len] == '\0' || name[len] == '.'))
+          if (MATCH_TONER_OID(OID_TONER_BLACK)) val_TonerBlack = tonerVal;
+          else if (MATCH_TONER_OID(OID_TONER_CYAN)) val_TonerCyan = tonerVal;
+          else if (MATCH_TONER_OID(OID_TONER_RED)) val_TonerRed = tonerVal;
+          else if (MATCH_TONER_OID(OID_TONER_YELLOW)) val_TonerYellow = tonerVal;
+#undef MATCH_TONER_OID
+        }
       }
       // 处理整数类型 (如计数器值)
       else if (value->getType() == SNMP::Type::Integer || value->getType() == SNMP::Type::Counter32 || value->getType() == SNMP::Type::Gauge32) {
@@ -122,6 +134,14 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
             val_ColPrints = val;
           } else if ((oidLen = strlen(OID_BW_PRINTS)) <= nameLen && strcmp(name + nameLen - oidLen, OID_BW_PRINTS) == 0) {
             val_BWPrints = val;
+          } else if ((oidLen = strlen(OID_TONER_BLACK)) <= nameLen && strncmp(name, OID_TONER_BLACK, oidLen) == 0 && (name[oidLen] == '\0' || name[oidLen] == '.')) {
+            val_TonerBlack = val;
+          } else if ((oidLen = strlen(OID_TONER_CYAN)) <= nameLen && strncmp(name, OID_TONER_CYAN, oidLen) == 0 && (name[oidLen] == '\0' || name[oidLen] == '.')) {
+            val_TonerCyan = val;
+          } else if ((oidLen = strlen(OID_TONER_RED)) <= nameLen && strncmp(name, OID_TONER_RED, oidLen) == 0 && (name[oidLen] == '\0' || name[oidLen] == '.')) {
+            val_TonerRed = val;
+          } else if ((oidLen = strlen(OID_TONER_YELLOW)) <= nameLen && strncmp(name, OID_TONER_YELLOW, oidLen) == 0 && (name[oidLen] == '\0' || name[oidLen] == '.')) {
+            val_TonerYellow = val;
           }
         }
       }
@@ -213,6 +233,17 @@ void sendSNMPRequest(IPAddress target) {
   }
 
   // 释放消息内存
+  delete message;
+}
+
+// --- 单独请求碳粉余量（与 server/oid 相同方式，打印机单独请求时返回正常）---
+void sendTonerRequest(IPAddress target) {
+  SNMP::Message* message = new SNMP::Message(SNMP::Version::V1, "public", SNMP::Type::GetRequest);
+  message->add(OID_TONER_BLACK, new SNMP::NullBER());
+  message->add(OID_TONER_CYAN, new SNMP::NullBER());
+  message->add(OID_TONER_RED, new SNMP::NullBER());
+  message->add(OID_TONER_YELLOW, new SNMP::NullBER());
+  if (snmp.send(message, target, 161)) lastRequestTime = millis();
   delete message;
 }
 

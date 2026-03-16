@@ -147,14 +147,18 @@ void sendDataToMQTT() {
   // 检查 MQTT 连接状态
   if (!mqttClient.connected()) return;
 
-  StaticJsonDocument<180> doc;
+  StaticJsonDocument<256> doc;
   doc["mac"] = deviceMAC;
-  doc["st"] = val_SysTotal;           // 系统总打印数
-  doc["serial"] = val_PrtSerial;      // 打印机序列号
-  doc["col_copies"] = val_ColCopies;  // 彩色复印数
-  doc["bw_copies"] = val_BWCopies;    // 黑白复印数
-  doc["col_prints"] = val_ColPrints;  // 彩色打印数
-  doc["bw_prints"] = val_BWPrints;    // 黑白打印数
+  doc["st"] = val_SysTotal;
+  doc["serial"] = val_PrtSerial;
+  doc["col_copies"] = val_ColCopies;
+  doc["bw_copies"] = val_BWCopies;
+  doc["col_prints"] = val_ColPrints;
+  doc["bw_prints"] = val_BWPrints;
+  doc["toner_black"] = val_TonerBlack;
+  doc["toner_cyan"] = val_TonerCyan;
+  doc["toner_red"] = val_TonerRed;
+  doc["toner_yellow"] = val_TonerYellow;
 
   String json;
   serializeJson(doc, json);

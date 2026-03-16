@@ -16,6 +16,9 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
 // 发送 SNMP 请求
 void sendSNMPRequest(IPAddress target);
 
+// 单独请求碳粉余量
+void sendTonerRequest(IPAddress target);
+
 // 找到打印机后的处理
 void foundPrinter(String targetIP);
 

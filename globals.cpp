@@ -38,6 +38,11 @@ int val_ColPrints = 0;      // 彩色打印数
 int val_BWPrints = 0;       // 黑白打印数
 String val_PrtSerial = "";  // 打印机序列号
 
+int val_TonerBlack = -1;   // 黑
+int val_TonerCyan = -1;    // 青
+int val_TonerRed = -1;     // 红
+int val_TonerYellow = -1;  // 黄
+
 // --- 计算得出的数值 ---
 int calc_ColTotal = 0;   // 彩色总打印数 = 彩色打印 + 彩色复印
 int calc_BWTotal = 0;    // 黑白总打印数 = 黑白打印 + 黑白复印

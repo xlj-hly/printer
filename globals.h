@@ -45,6 +45,12 @@ extern int val_ColPrints;     // 彩色打印数
 extern int val_BWPrints;      // 黑白打印数
 extern String val_PrtSerial;  // 打印机序列号
 
+// --- 碳粉余量 (%) ---
+extern int val_TonerBlack;   // 黑
+extern int val_TonerCyan;    // 青
+extern int val_TonerRed;     // 红
+extern int val_TonerYellow;  // 黄
+
 // --- 计算得出的数值 ---
 extern int calc_ColTotal;   // 彩色总打印数 = 彩色打印 + 彩色复印
 extern int calc_BWTotal;    // 黑白总打印数 = 黑白打印 + 黑白复印

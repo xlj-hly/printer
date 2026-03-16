@@ -48,6 +48,10 @@ const char index_html[] PROGMEM = R"rawliteral(
       <div class="val-box"><span>B&W Prints:</span> <b id="v_bp">-</b></div>
       <div class="val-box"><span>Color Copies:</span> <b id="v_cc">-</b></div>
       <div class="val-box"><span>Color Prints:</span> <b id="v_cp">-</b></div>
+      <div class="val-box"><span>碳粉 黑:</span> <b id="v_tb">-</b></div>
+      <div class="val-box"><span>碳粉 青:</span> <b id="v_tc">-</b></div>
+      <div class="val-box"><span>碳粉 红:</span> <b id="v_tr">-</b></div>
+      <div class="val-box"><span>碳粉 黄:</span> <b id="v_ty">-</b></div>
       <p class="status" id="sys_status">Connecting...</p>
       <p class="status" id="mqtt_status">MQTT: -</p>
     </div>
@@ -97,6 +101,10 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById("v_bp").innerHTML = data.bp;
         document.getElementById("v_cc").innerHTML = data.cc;
         document.getElementById("v_cp").innerHTML = data.cp;
+        document.getElementById("v_tb").innerHTML = data.toner_black >= 0 ? data.toner_black + '%' : '-';
+        document.getElementById("v_tc").innerHTML = data.toner_cyan >= 0 ? data.toner_cyan + '%' : '-';
+        document.getElementById("v_tr").innerHTML = data.toner_red >= 0 ? data.toner_red + '%' : '-';
+        document.getElementById("v_ty").innerHTML = data.toner_yellow >= 0 ? data.toner_yellow + '%' : '-';
         document.getElementById("sys_status").innerHTML = data.msg;
         
         // 更新 MQTT 状态
