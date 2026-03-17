@@ -69,6 +69,7 @@ String mqtt_topic_web = "";             // printer/{MAC}/web
 
 bool pendingOidRequest = false;
 String pendingOidTarget = "";
+String pendingOidRequestId = "";
 String pendingOidJson = "";
 
 // --- 打印机锁定状态 ---

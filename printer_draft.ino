@@ -219,6 +219,7 @@ void setup() {
   // 步骤 7: 配置 MQTT 服务器
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  mqttClient.setBufferSize(512);  // 默认 256 不足，OID 请求 payload 约 280+ 字节
 
   // 步骤 8: 初始化 Web 服务器
   initWebServer();

@@ -44,18 +44,42 @@
 
 ## MQTT 主题
 
-| 主题                              | 方向 | 说明                                  |
-| --------------------------------- | ---- | ------------------------------------- |
-| `printer/{MAC}/status`            | 发送 | 在线/离线状态                         |
-| `printer/{MAC}/init`              | 发送 | 初始化信息（版本、MAC、IP、序列号）   |
-| `printer/{MAC}/data`              | 发送 | 打印数数据                            |
-| `printer/{MAC}/lock`              | 发送 | 锁定状态                              |
-| `printer/{MAC}/web`               | 发送 | Web 配置页 URL                        |
-| `printer/oid/{MAC}`               | 发送 | 按需 OID 查询结果                     |
-| `server/{MAC}/ota/update`         | 接收 | OTA 更新：`{"url":"http://..."}`      |
-| `server/ota/broadcast/update`     | 接收 | 广播 OTA                              |
-| `server/{MAC}/lock`               | 接收 | `lock` / `unlock`                     |
-| `server/oid` / `server/oid/{MAC}` | 接收 | OID 查询：JSON 数组 `["oid1","oid2"]` |
+| 主题                              | 方向 | 说明                                          | 最大字节 |
+| --------------------------------- | ---- | --------------------------------------------- | -------- |
+| `printer/{MAC}/status`            | 发送 | 在线/离线状态                                 | 7        |
+| `printer/{MAC}/init`              | 发送 | 初始化信息（版本、MAC、IP、序列号）           | 160      |
+| `printer/{MAC}/data`              | 发送 | 打印数数据                                    | 256      |
+| `printer/{MAC}/lock`              | 发送 | 锁定状态                                      | 7        |
+| `printer/{MAC}/web`               | 发送 | Web 配置页 URL                                | 25       |
+| `printer/oid/{MAC}`               | 发送 | 按需 OID 查询结果                             | 512      |
+| `server/{MAC}/ota/update`         | 接收 | OTA 更新：`{"url":"http://..."}`              | 256      |
+| `server/ota/broadcast/update`     | 接收 | 广播 OTA                                      | 256      |
+| `server/{MAC}/lock`               | 接收 | `lock` / `unlock`                             | 7        |
+| `server/oid` / `server/oid/{MAC}` | 接收 | OID 查询：`{"requestId":"uuid","oids":[...]}` | 384      |
+
+### Payload 大小约束
+
+**PubSubClient 缓冲区**：`setBufferSize(512)`，需容纳「主题 + payload」整包。默认 256 不足，OID 请求会丢包。
+
+| 主题                              | Payload 格式                                                                        | 代码中 doc/buffer                            |
+| --------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------- |
+| `printer/{MAC}/status`            | `"online"` / `"offline"`                                                            | -                                            |
+| `printer/{MAC}/init`              | `{"version","mac","ip","serial"}`                                                   | `StaticJsonDocument<160>`                    |
+| `printer/{MAC}/data`              | `{"mac","st","serial","col_copies","bw_copies","col_prints","bw_prints","toner_*"}` | `StaticJsonDocument<256>`                    |
+| `printer/{MAC}/lock`              | `"lock"` / `"unlock"`                                                               | -                                            |
+| `printer/{MAC}/web`               | `"http://192.168.x.x"`                                                              | -                                            |
+| `printer/oid/{MAC}`               | `{"requestId","results":{"oid":"val",...}}`                                         | `StaticJsonDocument<512>`                    |
+| `server/{MAC}/ota/update`         | `{"url":"http://..."}`                                                              | `StaticJsonDocument<256>`                    |
+| `server/ota/broadcast/update`     | `{"url":"http://..."}`                                                              | 同上                                         |
+| `server/{MAC}/lock`               | `"lock"` / `"unlock"`                                                               | -                                            |
+| `server/oid` / `server/oid/{MAC}` | `{"requestId","oids":["oid1",...]}`                                                 | `StaticJsonDocument<384>` + PubSubClient 512 |
+
+**计算说明**：
+
+- **init**：version(5) + mac(17) + ip(15) + serial(30) + JSON 结构(~90) ≈ 157
+- **data**：9 个字段，整型最大 6 位、序列号 30 字符 + JSON 结构 ≈ 220
+- **OID 请求**：requestId(36) + 4×OID(45) + JSON 结构(~70) ≈ 286；单 OID 约 45 字符
+- **OID 响应**：requestId(36) + results 内每项 `"oid":"val"` 约 55 字节，4 项 ≈ 256，总计 ≈ 320
 
 ## 编译与烧录
 

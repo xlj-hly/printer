@@ -52,16 +52,19 @@ void onSNMPMessage(const SNMP::Message* message, const IPAddress remote, const u
         if (!found) allMatch = false;
       }
       if (allMatch && varbindlist->count() > 0) {
-        StaticJsonDocument<512> doc;
+        StaticJsonDocument<512> respDoc;
+        respDoc["requestId"] = pendingOidRequestId;
+        JsonObject results = respDoc.createNestedObject("results");
         for (unsigned int i = 0; i < varbindlist->count(); ++i) {
           SNMP::VarBind* vb = (*varbindlist)[i];
-          doc[vb->getName()] = snmpValueToString(vb->getValue());
+          results[vb->getName()] = snmpValueToString(vb->getValue());
         }
         String json;
-        serializeJson(doc, json);
+        serializeJson(respDoc, json);
         pendingOidResult = json;
         pendingOidRequest = false;
         pendingOidTarget = "";
+        pendingOidRequestId = "";
         pendingOidJson = "";
         return;
       }
@@ -232,12 +235,13 @@ void sendTonerRequest(IPAddress target) {
 }
 
 // --- 按 OID 列表请求，结果由 onSNMPMessage 收到后发到 printer/oid/{MAC} ---
-void sendSNMPOidRequest(IPAddress target, const String& oidsJson) {
+// 接收格式: {"requestId":"uuid","oids":["oid1","oid2"]}
+void sendSNMPOidRequest(IPAddress target, const String& payload) {
   StaticJsonDocument<384> doc;
-  if (deserializeJson(doc, oidsJson) || !doc.is<JsonArray>()) return;
-
-  JsonArray arr = doc.as<JsonArray>();
-  if (arr.size() == 0) return;
+  if (deserializeJson(doc, payload)) return;
+  const char* requestId = doc["requestId"];
+  JsonArray arr = doc["oids"];
+  if (!requestId || !arr || arr.size() == 0) return;
 
   SNMP::Message* message = new SNMP::Message(SNMP::Version::V1, "public", SNMP::Type::GetRequest);
   for (JsonVariant v : arr) {
@@ -248,7 +252,10 @@ void sendSNMPOidRequest(IPAddress target, const String& oidsJson) {
   if (snmp.send(message, target, 161)) {
     pendingOidRequest = true;
     pendingOidTarget = target.toString();
-    pendingOidJson = oidsJson;
+    pendingOidRequestId = requestId;
+    String oidsStr;
+    serializeJson(arr, oidsStr);
+    pendingOidJson = oidsStr;
   }
   delete message;
 }
