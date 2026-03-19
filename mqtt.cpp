@@ -33,12 +33,6 @@ void initMQTTTopics() {
   mqtt_topic_status += deviceMAC;
   mqtt_topic_status += "/status";
 
-  // 构建初始化主题: printer/{MAC}/init | 发送 | 初始化发一次
-  mqtt_topic_init.reserve(8 + deviceMAC.length() + 6);
-  mqtt_topic_init = "printer/";
-  mqtt_topic_init += deviceMAC;
-  mqtt_topic_init += "/init";
-
   // 构建数据主题: printer/{MAC}/data | 发送 | 上报数据
   mqtt_topic_data.reserve(8 + deviceMAC.length() + 7);
   mqtt_topic_data = "printer/";
@@ -73,10 +67,11 @@ void initMQTTTopics() {
   mqtt_topic_server_oid_mac = "printer/oid/";
   mqtt_topic_server_oid_mac += deviceMAC;
 
-  mqtt_topic_web.reserve(8 + deviceMAC.length() + 5);
-  mqtt_topic_web = "printer/";
-  mqtt_topic_web += deviceMAC;
-  mqtt_topic_web += "/web";
+  // 发送 Web 地址: printer/{MAC}/register
+  mqtt_topic_register.reserve(8 + deviceMAC.length() + 10);
+  mqtt_topic_register = "printer/";
+  mqtt_topic_register += deviceMAC;
+  mqtt_topic_register += "/register";
 }
 
 // --- 连接 MQTT ---
@@ -97,9 +92,14 @@ void connectMQTT() {
     Serial.println("✅ MQTT Connected!");
     mqttClient.publish(mqtt_topic_status.c_str(), "online", true);
 
-    String webUrl = (ETH.linkUp() && ETH.hasIP()) ? "http://" + ETH.localIP().toString()
-                                                  : "http://" + WiFi.localIP().toString();
-    if (webUrl.length() > 7) mqttClient.publish(mqtt_topic_web.c_str(), webUrl.c_str(), true);
+    String ip = (ETH.linkUp() && ETH.hasIP()) ? ETH.localIP().toString() : WiFi.localIP().toString();
+    if (ip.length() > 0) {
+      StaticJsonDocument<64> doc;
+      doc["ip"] = ip;
+      String buf;
+      serializeJson(doc, buf);
+      mqttClient.publish(mqtt_topic_register.c_str(), buf.c_str(), true);
+    }
 
     flushPendingMQTT();
 
@@ -140,17 +140,6 @@ void mqttLoop() {
 
 // --- 单一调度：读共享状态，按需调用 mqttPublish（仅在有连接时调用）---
 static void flushPendingMQTT() {
-  if (val_PrtSerial != lastInitSerial && val_PrtSerial.length() > 0) {
-    StaticJsonDocument<160> doc;
-    doc["version"] = FIRMWARE_VERSION;
-    doc["mac"] = deviceMAC;
-    doc["ip"] = deviceIP;
-    doc["serial"] = val_PrtSerial;
-    String json;
-    serializeJson(doc, json);
-    mqttPublish(mqtt_topic_init.c_str(), json.c_str());
-    lastInitSerial = val_PrtSerial;
-  }
   bool hasValidToner = val_TonerBlack >= 0 || val_TonerCyan >= 0 || val_TonerRed >= 0 || val_TonerYellow >= 0;
   bool needSendData = (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0)
                       || (val_SysTotal == last_sent_SysTotal && val_SysTotal > 0 && !last_sent_had_valid_toner && hasValidToner);

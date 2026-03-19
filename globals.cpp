@@ -52,20 +52,18 @@ int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 // --- MQTT 发送控制 ---
 int last_sent_SysTotal = -1;
 bool last_sent_had_valid_toner = false;
-String lastInitSerial = "";
 String last_sent_lock = "";
 String pendingOidResult = "";
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
 String mqtt_topic_status = "";          // printer/{MAC}/status
-String mqtt_topic_init = "";            // printer/{MAC}/init
 String mqtt_topic_data = "";            // printer/{MAC}/data
 String mqtt_topic_ota = "";             // server/{MAC}/ota/update
 String mqtt_topic_lock = "";            // server/{MAC}/lock
 String mqtt_topic_lock_state = "";      // printer/{MAC}/lock
 String mqtt_topic_oid_mac = "";         // server/oid/{MAC}
 String mqtt_topic_server_oid_mac = "";  // printer/oid/{MAC}
-String mqtt_topic_web = "";             // printer/{MAC}/web
+String mqtt_topic_register = "";        // printer/{MAC}/register，设备 IP
 
 bool pendingOidRequest = false;
 String pendingOidTarget = "";

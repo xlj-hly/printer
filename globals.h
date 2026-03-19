@@ -61,20 +61,18 @@ extern int calc_BWPrints;   // 黑白打印数 (从SNMP直接读取)
 // --- MQTT 发送控制（仅 mqtt 在连接时更新）---
 extern int last_sent_SysTotal;
 extern bool last_sent_had_valid_toner;
-extern String lastInitSerial;
 extern String last_sent_lock;
 extern String pendingOidResult;  // OID 查询结果待发送
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
 extern String mqtt_topic_status;          // printer/{MAC}/status
-extern String mqtt_topic_init;            // printer/{MAC}/init，初始化发一次
 extern String mqtt_topic_data;            // printer/{MAC}/data
 extern String mqtt_topic_ota;             // server/{MAC}/ota/update
 extern String mqtt_topic_lock;            // server/{MAC}/lock，接收 lock/unlock
 extern String mqtt_topic_lock_state;      // printer/{MAC}/lock，发送 lock/unlock
 extern String mqtt_topic_oid_mac;         // server/oid/{MAC}，接收 OID 请求
 extern String mqtt_topic_server_oid_mac;  // printer/oid/{MAC}，发送 OID 查询结果
-extern String mqtt_topic_web;             // printer/{MAC}/web，Web 配置页地址
+extern String mqtt_topic_register;       // printer/{MAC}/register，设备 IP
 
 // --- OID 按需查询状态（SNMP 响应与 MQTT 请求匹配）---
 extern bool pendingOidRequest;

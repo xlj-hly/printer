@@ -50,7 +50,7 @@
 | `printer/{MAC}/init`              | 发送 | 初始化信息（版本、MAC、IP、序列号）           | 160      |
 | `printer/{MAC}/data`              | 发送 | 打印数数据                                    | 256      |
 | `printer/{MAC}/lock`              | 发送 | 锁定状态                                      | 7        |
-| `printer/{MAC}/web`               | 发送 | Web 配置页 URL                                | 25       |
+| `printer/{MAC}/register`          | 发送 | 设备 IP                                       | 32       |
 | `printer/oid/{MAC}`               | 发送 | 按需 OID 查询结果                             | 512      |
 | `server/{MAC}/ota/update`         | 接收 | OTA 更新：`{"url":"http://..."}`              | 256      |
 | `server/ota/broadcast/update`     | 接收 | 广播 OTA                                      | 256      |
@@ -67,7 +67,7 @@
 | `printer/{MAC}/init`              | `{"version","mac","ip","serial"}`                                                   | `StaticJsonDocument<160>`                    |
 | `printer/{MAC}/data`              | `{"mac","st","serial","col_copies","bw_copies","col_prints","bw_prints","toner_*"}` | `StaticJsonDocument<256>`                    |
 | `printer/{MAC}/lock`              | `"lock"` / `"unlock"`                                                               | -                                            |
-| `printer/{MAC}/web`               | `"http://192.168.x.x"`                                                              | -                                            |
+| `printer/{MAC}/register`          | `{"ip":"192.168.x.x"}`                                                            | -                                            |
 | `printer/oid/{MAC}`               | `{"requestId","results":{"oid":"val",...}}`                                         | `StaticJsonDocument<512>`                    |
 | `server/{MAC}/ota/update`         | `{"url":"http://..."}`                                                              | `StaticJsonDocument<256>`                    |
 | `server/ota/broadcast/update`     | `{"url":"http://..."}`                                                              | 同上                                         |

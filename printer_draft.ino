@@ -158,6 +158,10 @@ void initWebServer() {
 // --- Arduino 初始化函数 ---
 void setup() {
   Serial.begin(115200);
+  
+  // LED 测试引脚：初始化输出高电平
+  pinMode(LED_TEST_PIN, OUTPUT);
+  digitalWrite(LED_TEST_PIN, HIGH);
 
   Serial.println("\n======================================");
   Serial.printf("固件版本: %s\n", FIRMWARE_VERSION);
