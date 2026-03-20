@@ -19,9 +19,9 @@ static const char* MQTT_TOPIC_BROADCAST_UPDATE = "server/ota/broadcast/update"; 
 
 static void flushPendingMQTT();
 
-// --- 底层发送方法（唯一真实 publish，仅在有连接时调用）---
-static void mqttPublish(const char* topic, const char* payload) {
-  mqttClient.publish(topic, payload);
+// --- 底层发送方法（仅在有连接时调用）---
+static void mqttPublish(const char* topic, const char* payload, bool retain = false) {
+  mqttClient.publish(topic, payload, retain);
 }
 
 // --- 初始化 MQTT 主题 ---
@@ -72,6 +72,12 @@ void initMQTTTopics() {
   mqtt_topic_register = "printer/";
   mqtt_topic_register += deviceMAC;
   mqtt_topic_register += "/register";
+
+  // 接收注册状态: server/{MAC}/register/status
+  mqtt_topic_register_status.reserve(12 + deviceMAC.length() + 15);
+  mqtt_topic_register_status = "server/";
+  mqtt_topic_register_status += deviceMAC;
+  mqtt_topic_register_status += "/register/status";
 }
 
 // --- 连接 MQTT ---
@@ -94,8 +100,9 @@ void connectMQTT() {
 
     String ip = (ETH.linkUp() && ETH.hasIP()) ? ETH.localIP().toString() : WiFi.localIP().toString();
     if (ip.length() > 0) {
-      StaticJsonDocument<64> doc;
+      StaticJsonDocument<96> doc;
       doc["ip"] = ip;
+      doc["version"] = FIRMWARE_VERSION;
       String buf;
       serializeJson(doc, buf);
       mqttClient.publish(mqtt_topic_register.c_str(), buf.c_str(), true);
@@ -107,6 +114,7 @@ void connectMQTT() {
     mqttClient.subscribe(mqtt_topic_ota.c_str());
     mqttClient.subscribe(MQTT_TOPIC_BROADCAST_UPDATE);
     mqttClient.subscribe(mqtt_topic_lock.c_str());
+    mqttClient.subscribe(mqtt_topic_register_status.c_str());
     mqttClient.subscribe(MQTT_TOPIC_OID);
     mqttClient.subscribe(mqtt_topic_oid_mac.c_str());
   }
@@ -141,6 +149,7 @@ void mqttLoop() {
 // --- 单一调度：读共享状态，按需调用 mqttPublish（仅在有连接时调用）---
 static void flushPendingMQTT() {
   bool hasValidToner = val_TonerBlack >= 0 || val_TonerCyan >= 0 || val_TonerRed >= 0 || val_TonerYellow >= 0;
+  // data 发送条件：SysTotal 变化，或 SysTotal 不变但首次有碳粉数据（避免碳粉数据漏报）
   bool needSendData = (val_SysTotal != last_sent_SysTotal && val_SysTotal > 0)
                       || (val_SysTotal == last_sent_SysTotal && val_SysTotal > 0 && !last_sent_had_valid_toner && hasValidToner);
   if (needSendData) {
@@ -164,7 +173,7 @@ static void flushPendingMQTT() {
     last_sent_had_valid_toner = hasValidToner;
   }
   if (printerLockPinState != last_sent_lock) {
-    mqttPublish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str());
+    mqttPublish(mqtt_topic_lock_state.c_str(), printerLockPinState.c_str(), true);
     last_sent_lock = printerLockPinState;
   }
   if (pendingOidResult.length() > 0) {
@@ -231,6 +240,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       printerLock(true);
     } else if (message == "unlock") {
       printerLock(false);
+    }
+  } else if (strcmp(topic, mqtt_topic_register_status.c_str()) == 0) {
+    StaticJsonDocument<64> doc;
+    if (!deserializeJson(doc, message)) {
+      isRegistered = doc["registered"].as<bool>();
     }
   } else if (strcmp(topic, MQTT_TOPIC_OID) == 0 || strcmp(topic, mqtt_topic_oid_mac.c_str()) == 0) {
     if (cfg_printer_ip.length() > 0) {

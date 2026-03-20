@@ -49,22 +49,26 @@ int calc_TotCopies = 0;  // 总复印数 = 彩色复印 + 黑白复印
 int calc_BWCopies = 0;   // 黑白复印数 (从SNMP直接读取)
 int calc_BWPrints = 0;   // 黑白打印数 (从SNMP直接读取)
 
-// --- MQTT 发送控制 ---
-int last_sent_SysTotal = -1;
-bool last_sent_had_valid_toner = false;
-String last_sent_lock = "";
-String pendingOidResult = "";
+// --- MQTT 发送控制（去重，避免重复上报）---
+int last_sent_SysTotal = -1;             // 上次 data 主题发送时的 SysTotal
+bool last_sent_had_valid_toner = false;  // 上次发送时是否含有效碳粉数据
+String last_sent_lock = "";              // 上次 lock 主题发送的状态
+String pendingOidResult = "";            // SNMP 查询结果，待发往 printer/oid/{MAC}
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
-String mqtt_topic_status = "";          // printer/{MAC}/status
-String mqtt_topic_data = "";            // printer/{MAC}/data
-String mqtt_topic_ota = "";             // server/{MAC}/ota/update
-String mqtt_topic_lock = "";            // server/{MAC}/lock
-String mqtt_topic_lock_state = "";      // printer/{MAC}/lock
-String mqtt_topic_oid_mac = "";         // server/oid/{MAC}
-String mqtt_topic_server_oid_mac = "";  // printer/oid/{MAC}
-String mqtt_topic_register = "";        // printer/{MAC}/register，设备 IP
+String mqtt_topic_status = "";           // printer/{MAC}/status
+String mqtt_topic_data = "";             // printer/{MAC}/data
+String mqtt_topic_ota = "";              // server/{MAC}/ota/update
+String mqtt_topic_lock = "";             // server/{MAC}/lock
+String mqtt_topic_lock_state = "";       // printer/{MAC}/lock
+String mqtt_topic_oid_mac = "";          // server/oid/{MAC}
+String mqtt_topic_server_oid_mac = "";   // printer/oid/{MAC}
+String mqtt_topic_register = "";         // printer/{MAC}/register，设备 IP
+String mqtt_topic_register_status = "";  // server/{MAC}/register/status
 
+bool isRegistered = false;  // 由 server/{MAC}/register/status 更新
+
+// --- OID 按需查询（SNMP 响应与 MQTT 请求匹配）---
 bool pendingOidRequest = false;
 String pendingOidTarget = "";
 String pendingOidRequestId = "";

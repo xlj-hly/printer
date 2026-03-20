@@ -2,7 +2,7 @@
  * Printer Node (NodeMCU-32S + W5500)
  *
  * 功能：SNMP 读 Ricoh 计数器、MQTT 上报、OTA、Web 配置
- * 硬件：NodeMCU-32S + W5500 (SPI
+ * 硬件：NodeMCU-32S + W5500 (SPI 以太网)
  */
 
 #include <Arduino.h>
@@ -28,6 +28,7 @@
 #include "mqtt.h"
 #include "snmp_handler.h"
 #include "printer_monitor.h"
+#include "led_indicator.h"
 
 // --- 函数前置声明 ---
 void initNetwork();                             // 初始化网络连接
@@ -158,10 +159,8 @@ void initWebServer() {
 // --- Arduino 初始化函数 ---
 void setup() {
   Serial.begin(115200);
-  
-  // LED 测试引脚：初始化输出高电平
+
   pinMode(LED_TEST_PIN, OUTPUT);
-  digitalWrite(LED_TEST_PIN, HIGH);
 
   Serial.println("\n======================================");
   Serial.printf("固件版本: %s\n", FIRMWARE_VERSION);
@@ -251,6 +250,7 @@ void loop() {
     processScanLoop();  // 扫描模式处理
   }
 
-  printerSNMPLoop();  // 定时 SNMP 请求
-  printerWatchdog();  // 打印机看门狗检测
+  printerSNMPLoop();   // 定时 SNMP 请求
+  printerWatchdog();   // 打印机看门狗检测
+  ledIndicatorLoop();  // LED 注册/锁机状态指示灯
 }

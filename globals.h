@@ -65,14 +65,18 @@ extern String last_sent_lock;
 extern String pendingOidResult;  // OID 查询结果待发送
 
 // --- MQTT 主题字符串（运行时不变，连接时构建） ---
-extern String mqtt_topic_status;          // printer/{MAC}/status
-extern String mqtt_topic_data;            // printer/{MAC}/data
-extern String mqtt_topic_ota;             // server/{MAC}/ota/update
-extern String mqtt_topic_lock;            // server/{MAC}/lock，接收 lock/unlock
-extern String mqtt_topic_lock_state;      // printer/{MAC}/lock，发送 lock/unlock
-extern String mqtt_topic_oid_mac;         // server/oid/{MAC}，接收 OID 请求
-extern String mqtt_topic_server_oid_mac;  // printer/oid/{MAC}，发送 OID 查询结果
-extern String mqtt_topic_register;       // printer/{MAC}/register，设备 IP
+extern String mqtt_topic_status;           // printer/{MAC}/status
+extern String mqtt_topic_data;             // printer/{MAC}/data
+extern String mqtt_topic_ota;              // server/{MAC}/ota/update
+extern String mqtt_topic_lock;             // server/{MAC}/lock，接收 lock/unlock
+extern String mqtt_topic_lock_state;       // printer/{MAC}/lock，发送 lock/unlock
+extern String mqtt_topic_oid_mac;          // server/oid/{MAC}，接收 OID 请求
+extern String mqtt_topic_server_oid_mac;   // printer/oid/{MAC}，发送 OID 查询结果
+extern String mqtt_topic_register;         // printer/{MAC}/register，设备 IP
+extern String mqtt_topic_register_status;  // server/{MAC}/register/status，注册状态
+
+// --- 注册状态（由 register/status 消息更新）---
+extern bool isRegistered;
 
 // --- OID 按需查询状态（SNMP 响应与 MQTT 请求匹配）---
 extern bool pendingOidRequest;
