@@ -100,9 +100,10 @@ void connectMQTT() {
 
     String ip = (ETH.linkUp() && ETH.hasIP()) ? ETH.localIP().toString() : WiFi.localIP().toString();
     if (ip.length() > 0) {
-      StaticJsonDocument<96> doc;
+      StaticJsonDocument<160> doc;
       doc["ip"] = ip;
       doc["version"] = FIRMWARE_VERSION;
+      doc["serial"] = val_PrtSerial;
       String buf;
       serializeJson(doc, buf);
       mqttClient.publish(mqtt_topic_register.c_str(), buf.c_str(), true);
