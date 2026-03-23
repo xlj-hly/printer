@@ -90,8 +90,8 @@
 ## 文件结构
 
 ```
-printer_draft/
-├── printer_draft.ino   # 主程序
+printer_es32/
+├── printer_es32.ino   # 主程序
 ├── config.h           # 固件版本、MQTT、以太网引脚、SNMP OID
 ├── globals.h/cpp      # 全局变量
 ├── mqtt.h/cpp         # MQTT 连接、消息、OTA 触发
